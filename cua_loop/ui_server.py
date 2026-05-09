@@ -470,6 +470,82 @@ def run_swarm_sync(url: str | None, task: str):
         except Exception:
             pass
 
+def run_orchestrated_swarm_sync(task: str, num_agents: int = 6):
+    import httpx
+    from cua_loop.scaling import run_orchestrated_swarm
+    try:
+        result = run_orchestrated_swarm(task=task, num_agents=num_agents)
+        
+        # Get synthesis and intent from the result
+        synthesis = getattr(result, '_synthesis', None)
+        intent = getattr(result, '_intent', None)
+        agent_tasks = getattr(result, '_agent_tasks', [])
+        
+        # Build detailed result message
+        if synthesis:
+            report = synthesis.final_report[:500] + "..." if len(synthesis.final_report) > 500 else synthesis.final_report
+            result_msg = (
+                f"Orchestrated Swarm Complete!\n"
+                f"Confidence: {synthesis.confidence_score:.0%}\n"
+                f"Agents: {len(agent_tasks)} | Findings: {len(synthesis.key_findings)}\n\n"
+                f"Key Findings:\n" + "\n".join(f"• {f}" for f in synthesis.key_findings[:5]) + "\n\n"
+                f"Report:\n{report}"
+            )
+        else:
+            result_msg = f"Swarm completed with {len(result.attempts)} agents."
+        
+        payload = {
+            "status": "success" if result.success else "failed",
+            "result": result_msg,
+            "synthesis": {
+                "final_report": synthesis.final_report if synthesis else "",
+                "key_findings": synthesis.key_findings if synthesis else [],
+                "confidence_score": synthesis.confidence_score if synthesis else 0.0,
+                "gaps": synthesis.gaps_or_uncertainties if synthesis else [],
+            } if synthesis else None,
+            "intent": {
+                "true_goal": intent.true_goal if intent else task,
+                "success_criteria": intent.success_criteria if intent else [],
+                "key_entities": intent.key_entities if intent else [],
+            } if intent else None,
+            "agent_roles": [
+                {"agent_id": t.agent_id, "role_name": t.role_name, "task": t.task_description}
+                for t in agent_tasks
+            ],
+        }
+        
+        try:
+            httpx.post("http://localhost:8555/update", json=payload, timeout=30.0)
+        except Exception:
+            pass
+            
+        # Also update per-agent state for the swarm view
+        for attempt in result.attempts:
+            agent_key = f"agent_{attempt.attempt_index}"
+            task_info = next((t for t in agent_tasks if t.agent_id == attempt.attempt_index), None)
+            role_name = task_info.role_name if task_info else f"Agent {attempt.attempt_index}"
+            
+            agent_payload = {
+                "status": "success" if attempt.verifier.success else "failed",
+                "result": attempt.verifier.reason,
+                "role_name": role_name,
+                "task_description": task_info.task_description if task_info else "",
+            }
+            try:
+                httpx.post(f"http://localhost:8555/update?channel={agent_key}", json=agent_payload, timeout=10.0)
+            except Exception:
+                pass
+                
+    except Exception as e:
+        try:
+            httpx.post(
+                "http://localhost:8555/update",
+                json={"status": "failed", "result": f"Orchestrated swarm error: {e}\n{traceback.format_exc()}"},
+                timeout=10.0,
+            )
+        except Exception:
+            pass
+
 @app.post("/start")
 async def start_agent(req: StartRequest):
     state["status"] = "running"
@@ -486,6 +562,57 @@ async def start_agent(req: StartRequest):
     else:
         loop.run_in_executor(executor, run_agent_sync, req.url, req.task)
     return {"status": "started"}
+
+class SwarmOrchestrateRequest(BaseModel):
+    task: str
+    num_agents: int = 6
+
+@app.post("/swarm/orchestrate")
+async def swarm_orchestrate(req: SwarmOrchestrateRequest):
+    from cua_loop.swarm_orchestrator import run_swarm_orchestration
+    try:
+        plan = run_swarm_orchestration(task=req.task, num_agents=req.num_agents)
+        return {
+            "status": "ok",
+            "intent": {
+                "true_goal": plan.intent.true_goal,
+                "desired_output_format": plan.intent.desired_output_format,
+                "success_criteria": plan.intent.success_criteria,
+                "key_entities": plan.intent.key_entities,
+                "suggested_num_agents": plan.intent.suggested_num_agents,
+            },
+            "agent_tasks": [
+                {
+                    "agent_id": t.agent_id,
+                    "role_name": t.role_name,
+                    "task_description": t.task_description,
+                    "specific_instructions": t.specific_instructions,
+                    "expected_output": t.expected_output,
+                }
+                for t in plan.agent_tasks
+            ],
+        }
+    except Exception as e:
+        return JSONResponse(
+            {"status": "error", "message": str(e)},
+            status_code=500
+        )
+
+@app.post("/swarm/run")
+async def swarm_run(req: SwarmOrchestrateRequest):
+    state["status"] = "running"
+    state["task"] = req.task
+    state["screenshot_url"] = ""
+    state["action"] = {}
+    state["step"] = 0
+    state["result"] = ""
+    await broadcast(state)
+    
+    swarm_state.clear()
+    
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(executor, run_orchestrated_swarm_sync, req.task, req.num_agents)
+    return {"status": "orchestrated_swarm_started"}
 
 @app.get("/stream")
 async def stream(request: Request):
@@ -875,20 +1002,34 @@ async def swarm_page():
     return f"""<!DOCTYPE html>
     <html>
     <head>
-        <title>AEGIS - Swarm Orchestration</title>
+        <title>AEGIS - Orchestrated Swarm</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
             {SHARED_CSS}
             body {{ margin: 0; padding: 0; overflow-x: hidden; min-height: 100vh; width: 100vw; display: flex; flex-direction: column; }}
             
+            .main-layout {{ display: flex; flex-direction: column; height: calc(100vh - 40px); }}
+            
+            .intent-panel {{
+                background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%);
+                border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+                padding: 16px 40px;
+                display: none;
+            }}
+            .intent-panel.visible {{ display: block; }}
+            .intent-title {{ font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }}
+            .intent-goal {{ font-size: 15px; color: var(--text-main); font-weight: 600; line-height: 1.4; }}
+            .intent-meta {{ display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text-muted); }}
+            .intent-chip {{ background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px; }}
+            
             .grid-container {{ 
                 display: grid; 
                 grid-template-columns: repeat(3, 1fr); 
-                grid-template-rows: repeat(3, 1fr); 
-                width: 100vw; 
-                height: calc(100vh - 40px); 
+                flex: 1;
                 gap: 1px; 
                 background: var(--panel-border);
+                overflow-y: auto;
+                min-height: 0;
             }}
             
             .agent-view {{ 
@@ -898,6 +1039,7 @@ async def swarm_page():
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                min-height: 200px;
             }}
             
             .screenshot-img {{ 
@@ -914,8 +1056,8 @@ async def swarm_page():
             .agent-overlay {{
                 position: absolute;
                 bottom: 0; left: 0; right: 0;
-                padding: 12px 16px;
-                background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+                padding: 14px 16px;
+                background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 60%, transparent 100%);
                 display: flex;
                 justify-content: space-between;
                 align-items: flex-end;
@@ -923,9 +1065,11 @@ async def swarm_page():
                 z-index: 5;
             }}
             
-            .agent-id {{ font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }}
-            .action-text {{ font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }}
-            .result-text {{ font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 4px; word-break: break-all; }}
+            .agent-role {{ font-size: 12px; color: var(--accent); font-weight: 700; letter-spacing: 0.02em; margin-bottom: 2px; }}
+            .agent-id {{ font-size: 10px; color: var(--text-muted); font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }}
+            .action-text {{ font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--primary); margin-top: 4px; }}
+            .result-text {{ font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 4px; word-break: break-all; max-width: 200px; }}
+            .task-preview {{ font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
             
             .status-dot {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }}
             .agent-view.status-idle .status-dot {{ background: var(--text-muted); }}
@@ -939,8 +1083,30 @@ async def swarm_page():
                 100% {{ transform: scale(0.95); opacity: 0.5; }}
             }}
 
-            .step-counter {{ font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); }}
+            .step-counter {{ font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }}
             .step-counter span {{ color: var(--text-main); font-weight: 600; }}
+
+            .synthesis-panel {{
+                background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(245, 158, 11, 0.02) 100%);
+                border-top: 2px solid rgba(245, 158, 11, 0.3);
+                padding: 20px 40px;
+                max-height: 250px;
+                overflow-y: auto;
+                display: none;
+            }}
+            .synthesis-panel.visible {{ display: block; }}
+            .synthesis-title {{ font-size: 12px; color: var(--warning); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }}
+            .synthesis-report {{ font-size: 13px; color: var(--text-main); line-height: 1.6; white-space: pre-wrap; }}
+            .synthesis-meta {{ display: flex; gap: 20px; margin-top: 12px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }}
+            .confidence-badge {{ background: rgba(245, 158, 11, 0.15); color: var(--warning); padding: 2px 10px; border-radius: 99px; font-weight: 600; }}
+            .finding-chip {{ display: inline-block; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 11px; }}
+            .error-badge {{ background: rgba(239, 68, 68, 0.15); color: var(--danger); padding: 2px 10px; border-radius: 99px; font-weight: 600; font-size: 11px; }}
+            .retry-badge {{ background: rgba(16, 185, 129, 0.15); color: var(--success); padding: 2px 10px; border-radius: 99px; font-weight: 600; font-size: 11px; }}
+            .health-bar {{ width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 8px; overflow: hidden; }}
+            .health-fill {{ height: 100%; border-radius: 2px; transition: width 0.5s ease; }}
+            .health-fill.good {{ background: var(--success); }}
+            .health-fill.warn {{ background: var(--warning); }}
+            .health-fill.bad {{ background: var(--danger); }}
 
             .cursor-overlay {{ 
                 position: absolute; width: 24px; height: 24px; 
@@ -953,25 +1119,28 @@ async def swarm_page():
             .steering-panel {{
                 background: var(--bg-color);
                 border-top: 1px solid var(--panel-border);
-                padding: 40px;
+                padding: 20px 40px;
                 display: flex;
-                gap: 24px;
+                gap: 16px;
                 align-items: center;
                 width: 100%;
                 box-sizing: border-box;
-                min-height: 120px;
             }}
 
-            .input-group {{ display: flex; flex-direction: column; gap: 6px; }}
+            .input-group {{ display: flex; flex-direction: column; gap: 4px; }}
             .input-group label {{ font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }}
-            .input-group input {{ background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 10px 14px; border-radius: 8px; font-size: 13px; outline: none; transition: all 0.2s; font-family: 'Inter', sans-serif; }}
+            .input-group input {{ background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none; transition: all 0.2s; font-family: 'Inter', sans-serif; }}
             .input-group input:focus {{ border-color: var(--primary); }}
             
             .btn-start {{ 
-                background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; height: 44px; margin-top: auto;
+                background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%); 
+                color: white; border: none; padding: 10px 24px; border-radius: 8px; 
+                font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; 
+                display: flex; align-items: center; justify-content: center; height: 40px; margin-top: auto;
+                box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
             }}
-            .btn-start:hover {{ background: var(--primary-hover); }}
-            .btn-start:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+            .btn-start:hover {{ transform: translateY(-1px); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4); }}
+            .btn-start:disabled {{ opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }}
 
             .loader {{ border: 2px solid rgba(255,255,255,0.1); border-top-color: white; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite; display: none; margin-left: 8px; }}
             @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
@@ -995,8 +1164,8 @@ async def swarm_page():
                 gap: 8px;
                 transition: color 0.3s;
             }}
-            .global-status-dock.active {{ color: var(--primary); border-color: rgba(59, 130, 246, 0.3); }}
-            .global-status-dock.active .status-dot {{ background: var(--primary); animation: pulse 1.5s infinite; box-shadow: 0 0 10px var(--primary); }}
+            .global-status-dock.active {{ color: var(--accent); border-color: rgba(139, 92, 246, 0.3); }}
+            .global-status-dock.active .status-dot {{ background: var(--accent); animation: pulse 1.5s infinite; box-shadow: 0 0 10px var(--accent); }}
         </style>
     </head>
     <body>
@@ -1004,95 +1173,215 @@ async def swarm_page():
         
         <div class="global-status-dock" id="global-status">
             <div class="status-dot"></div>
-            <span id="global-status-text">SWARM IDLE</span>
+            <span id="global-status-text">ORCHESTRATOR IDLE</span>
         </div>
 
-        <div class="grid-container" id="grid-container"></div>
+        <div class="intent-panel" id="intent-panel">
+            <div class="intent-title">🎯 Intent Analysis</div>
+            <div class="intent-goal" id="intent-goal">-</div>
+            <div class="intent-meta" id="intent-meta"></div>
+        </div>
+
+        <div class="main-layout">
+            <div class="grid-container" id="grid-container"></div>
+            
+            <div class="synthesis-panel" id="synthesis-panel">
+                <div class="synthesis-title">✨ Synthesized Result</div>
+                <div class="synthesis-report" id="synthesis-report"></div>
+                <div class="synthesis-meta" id="synthesis-meta"></div>
+            </div>
+        </div>
         
         <div class="steering-panel">
-            <div class="input-group" style="flex: 1; max-width: 400px;">
-                <label>Target URL</label>
-                <input type="text" id="target-url" placeholder="https://…">
-            </div>
             <div class="input-group" style="flex: 2;">
                 <label>Objective</label>
-                <input type="text" id="target-task" value="extract top 10 stories with title, url, points as a table">
+                <input type="text" id="target-task" value="Research and compare the top 3 AI coding assistants: Cursor, GitHub Copilot, and Claude Code. Include pricing, features, and ideal use cases." placeholder="Describe a complex task to decompose...">
             </div>
-            <button id="btn-start" class="btn-start" onclick="startSwarm()">
-                <span id="btn-text">Launch Swarm</span>
+            <div class="input-group" style="width: 100px;">
+                <label>Agents</label>
+                <input type="number" id="num-agents" value="6" min="2" max="12">
+            </div>
+            <button id="btn-start" class="btn-start" onclick="startOrchestratedSwarm()">
+                <span id="btn-text">Orchestrate Swarm</span>
                 <div id="btn-loader" class="loader"></div>
             </button>
         </div>
         
         <script>
-            const NUM_AGENTS = 9;
             const gridContainer = document.getElementById("grid-container");
-            const DISPLAY_WIDTH = 1280;
-            const DISPLAY_HEIGHT = 720;
-            
-            for (let i = 0; i < NUM_AGENTS; i++) {{
-                const el = document.createElement("div");
-                el.className = "agent-view status-idle";
-                el.id = `agent-${{i}}`;
-                el.innerHTML = `
-                    <img id="screenshot-${{i}}" class="screenshot-img" src="" alt=""/>
-                    <div id="cursor-${{i}}" class="cursor-overlay"></div>
-                    <div class="agent-overlay">
-                        <div>
-                            <div class="agent-id">
-                                <div class="status-dot"></div>AGENT 0${{i+1}}
-                            </div>
-                            <div class="action-text" id="action-text-${{i}}">-</div>
-                            <div class="result-text" id="result-text-${{i}}"></div>
-                        </div>
-                        <div class="step-counter">STEP <span id="step-count-${{i}}">0</span>/40</div>
-                    </div>
-                `;
-                gridContainer.appendChild(el);
-                
-                document.getElementById(`screenshot-${{i}}`).onload = function() {{
-                    this.classList.add('loaded');
-                }};
-            }}
-
-            const evtSource = new EventSource("/swarm/stream");
+            const intentPanel = document.getElementById("intent-panel");
+            const intentGoal = document.getElementById("intent-goal");
+            const intentMeta = document.getElementById("intent-meta");
+            const synthesisPanel = document.getElementById("synthesis-panel");
+            const synthesisReport = document.getElementById("synthesis-report");
+            const synthesisMeta = document.getElementById("synthesis-meta");
             const btnStart = document.getElementById("btn-start");
             const btnText = document.getElementById("btn-text");
             const btnLoader = document.getElementById("btn-loader");
             const globalStatus = document.getElementById("global-status");
             const globalStatusText = document.getElementById("global-status-text");
             
-            async function startSwarm() {{
-                const url = document.getElementById("target-url").value.trim();
-                const task = document.getElementById("target-task").value.trim();
-                if (!task) return;
+            let agentTasks = [];
+            let evtSource = null;
+            
+            function clearGrid() {{
+                gridContainer.innerHTML = "";
+                intentPanel.classList.remove("visible");
+                synthesisPanel.classList.remove("visible");
+            }}
+            
+            function buildGrid(numAgents) {{
+                clearGrid();
+                const cols = numAgents <= 2 ? 2 : numAgents <= 4 ? 2 : numAgents <= 6 ? 3 : numAgents <= 9 ? 3 : 4;
+                gridContainer.style.gridTemplateColumns = `repeat(${{cols}}, 1fr)`;
+                
+                for (let i = 0; i < numAgents; i++) {{
+                    const task = agentTasks[i] || {{ role_name: `Agent ${{i+1}}`, task_description: "" }};
+                    const el = document.createElement("div");
+                    el.className = "agent-view status-idle";
+                    el.id = `agent-${{i}}`;
+                    el.innerHTML = `
+                        <img id="screenshot-${{i}}" class="screenshot-img" src="" alt=""/>
+                        <div id="cursor-${{i}}" class="cursor-overlay"></div>
+                        <div class="agent-overlay">
+                            <div>
+                                <div class="agent-role">${{task.role_name}}</div>
+                                <div class="agent-id">
+                                    <div class="status-dot"></div>AGENT 0${{i+1}}
+                                </div>
+                                <div class="task-preview" id="task-preview-${{i}}">${{task.task_description || ''}}</div>
+                                <div class="action-text" id="action-text-${{i}}">-</div>
+                                <div class="result-text" id="result-text-${{i}}"></div>
+                            </div>
+                            <div class="step-counter">STEP <span id="step-count-${{i}}">0</span>/40</div>
+                        </div>
+                    `;
+                    gridContainer.appendChild(el);
+                    
+                    document.getElementById(`screenshot-${{i}}`).onload = function() {{
+                        this.classList.add('loaded');
+                    }};
+                }}
+            }}
+            
+            function showIntent(intent) {{
+                intentGoal.innerText = intent.true_goal || "-";
+                let metaHtml = "";
+                if (intent.success_criteria && intent.success_criteria.length > 0) {{
+                    metaHtml += `<span class="intent-chip">Success: ${{intent.success_criteria[0]}}</span>`;
+                }}
+                if (intent.key_entities && intent.key_entities.length > 0) {{
+                    metaHtml += `<span class="intent-chip">Entities: ${{intent.key_entities.slice(0, 3).join(", ")}}</span>`;
+                }}
+                metaHtml += `<span class="intent-chip">Agents: ${{intent.suggested_num_agents || 6}}</span>`;
+                intentMeta.innerHTML = metaHtml;
+                intentPanel.classList.add("visible");
+            }}
+            
+            function showSynthesis(data) {{
+                if (!data.synthesis) return;
+                const syn = data.synthesis;
+                synthesisReport.innerText = syn.final_report || "No synthesis available.";
 
+                let metaHtml = "";
+                if (syn.confidence_score !== undefined) {{
+                    metaHtml += `<span class="confidence-badge">Confidence: ${{(syn.confidence_score * 100).toFixed(0)}}%</span>`;
+                }}
+                if (syn.health_ratio !== undefined) {{
+                    const healthPct = Math.round(syn.health_ratio * 100);
+                    const healthClass = healthPct >= 70 ? "good" : healthPct >= 40 ? "warn" : "bad";
+                    metaHtml += `<div style="width:120px;"><div class="health-bar"><div class="health-fill ${{healthClass}}" style="width:${{healthPct}}%"></div></div><div style="font-size:10px;text-align:center;margin-top:2px;">${{healthPct}}% healthy</div></div>`;
+                }}
+                if (syn.failed_agents > 0) {{
+                    metaHtml += `<span class="error-badge">${{syn.failed_agents}} failed</span>`;
+                }}
+                if (syn.retry_info && syn.retry_info.retry_recovered > 0) {{
+                    metaHtml += `<span class="retry-badge">${{syn.retry_info.retry_recovered}} recovered</span>`;
+                }}
+                if (syn.key_findings && syn.key_findings.length > 0) {{
+                    syn.key_findings.forEach(f => {{
+                        metaHtml += `<span class="finding-chip">${{f}}</span>`;
+                    }});
+                }}
+                synthesisMeta.innerHTML = metaHtml;
+                synthesisPanel.classList.add("visible");
+            }}
+            
+            async function startOrchestratedSwarm() {{
+                const task = document.getElementById("target-task").value.trim();
+                const numAgents = parseInt(document.getElementById("num-agents").value) || 6;
+                if (!task) return alert("Task is required.");
+                
                 btnStart.disabled = true;
                 btnLoader.style.display = "block";
-                btnText.innerText = "Deploying";
+                btnText.innerText = "Analyzing Intent...";
                 globalStatus.className = "global-status-dock active";
-                globalStatusText.innerText = "SWARM ACTIVE";
-
+                globalStatusText.innerText = "DECOMPOSING TASK";
+                
                 try {{
-                    const body = {{ task, swarm: true }};
-                    if (url) body.url = url;
-                    await fetch("/start", {{
+                    // Step 1: Get decomposition from orchestrator
+                    const decomposeRes = await fetch("/swarm/orchestrate", {{
                         method: "POST",
                         headers: {{ "Content-Type": "application/json" }},
-                        body: JSON.stringify(body)
+                        body: JSON.stringify({{ task, num_agents: numAgents }})
                     }});
+                    const plan = await decomposeRes.json();
+                    
+                    if (plan.status !== "ok") {{
+                        throw new Error(plan.message || "Decomposition failed");
+                    }}
+                    
+                    // Show intent
+                    if (plan.intent) {{
+                        showIntent(plan.intent);
+                    }}
+                    
+                    // Build grid with roles
+                    agentTasks = plan.agent_tasks || [];
+                    buildGrid(numAgents);
+                    
+                    // Update UI
+                    btnText.innerText = "Running Agents...";
+                    globalStatusText.innerText = "SWARM ACTIVE";
+                    
+                    // Start SSE
+                    if (evtSource) evtSource.close();
+                    evtSource = new EventSource("/swarm/stream");
+                    evtSource.onmessage = function(event) {{
+                        const msg = JSON.parse(event.data);
+                        if (msg.type === 'full_state') {{
+                            for (const [id, agent] of Object.entries(msg.data)) {{
+                                updateAgent(id, agent);
+                            }}
+                        }} else if (msg.type === 'update') {{
+                            updateAgent(msg.agent_id, msg.data);
+                            // Check for synthesis in the main state
+                            if (msg.data.synthesis) {{
+                                showSynthesis(msg.data);
+                            }}
+                        }}
+                    }};
+                    
+                    // Step 2: Launch the swarm
+                    await fetch("/swarm/run", {{
+                        method: "POST",
+                        headers: {{ "Content-Type": "application/json" }},
+                        body: JSON.stringify({{ task, num_agents: numAgents }})
+                    }});
+                    
                 }} catch(e) {{
                     console.error(e);
-                    resetUI();
+                    btnText.innerText = "Error: " + e.message;
+                    setTimeout(resetUI, 3000);
                 }}
             }}
             
             function resetUI() {{
                 btnStart.disabled = false;
                 btnLoader.style.display = "none";
-                btnText.innerText = "Launch Swarm";
+                btnText.innerText = "Orchestrate Swarm";
                 globalStatus.className = "global-status-dock";
-                globalStatusText.innerText = "SWARM IDLE";
+                globalStatusText.innerText = "ORCHESTRATOR IDLE";
             }}
             
             function updateAgent(agentId, data) {{
@@ -1100,6 +1389,8 @@ async def swarm_page():
                 if (isNaN(i)) return;
                 
                 const container = document.getElementById(`agent-${{i}}`);
+                if (!container) return;
+                
                 const stepCount = document.getElementById(`step-count-${{i}}`);
                 const screenshot = document.getElementById(`screenshot-${{i}}`);
                 const cursor = document.getElementById(`cursor-${{i}}`);
@@ -1110,61 +1401,80 @@ async def swarm_page():
                     container.className = `agent-view status-${{data.status}}`;
                     if (data.status === 'success' || data.status === 'failed') {{
                         if (data.result) {{
-                            resultText.innerText = data.result.substring(0, 80) + (data.result.length > 80 ? "..." : "");
+                            const isError = data.status === 'failed' && data.result.includes('error');
+                            resultText.innerText = data.result.substring(0, 100) + (data.result.length > 100 ? "..." : "");
                             resultText.style.color = data.status === 'success' ? 'var(--success)' : 'var(--danger)';
+                            if (isError) {{
+                                const retryBadge = document.createElement('span');
+                                retryBadge.className = 'retry-badge';
+                                retryBadge.innerText = 'RETRYING';
+                                retryBadge.style.marginLeft = '6px';
+                                resultText.appendChild(retryBadge);
+                            }}
+                        }}
+                        const allAgents = document.querySelectorAll('.agent-view');
+                        const allDone = Array.from(allAgents).every(a => 
+                            a.classList.contains('status-success') || a.classList.contains('status-failed')
+                        );
+                        if (allDone && agentTasks.length > 0) {{
+                            globalStatusText.innerText = "SYNTHESIZING";
                         }}
                     }} else {{
                         resultText.innerText = "";
                     }}
                 }}
                 
-                if (data.screenshot_url && data.screenshot_url !== screenshot.src) {{
+                if (data.role_name && agentTasks[i]) {{
+                    agentTasks[i].role_name = data.role_name;
+                    const roleEl = container.querySelector('.agent-role');
+                    if (roleEl) roleEl.innerText = data.role_name;
+                }}
+                
+                if (data.screenshot_url && screenshot && data.screenshot_url !== screenshot.src) {{
                     screenshot.classList.remove('loaded');
                     screenshot.src = data.screenshot_url;
                 }}
                 
-                if (data.step !== undefined) stepCount.innerText = data.step;
+                if (data.step !== undefined && stepCount) stepCount.innerText = data.step;
                 
                 if (data.action && Object.keys(data.action).length > 0) {{
-                    actionText.innerText = data.action.type || '-';
+                    if (actionText) actionText.innerText = data.action.type || '-';
                     
-                    if (data.action.x !== undefined && data.action.y !== undefined) {{
+                    if (data.action.x !== undefined && data.action.y !== undefined && cursor) {{
                         cursor.style.display = 'block';
                         const updateCursor = () => {{
-                            if (!screenshot.complete) return;
+                            if (!screenshot || !screenshot.complete) return;
                             const rect = screenshot.getBoundingClientRect();
                             if (rect.width === 0) return;
-                            const scale = Math.min(rect.width / DISPLAY_WIDTH, rect.height / DISPLAY_HEIGHT);
-                            const ax = (rect.width - (DISPLAY_WIDTH * scale)) / 2;
-                            const ay = (rect.height - (DISPLAY_HEIGHT * scale)) / 2;
-                            
+                            const scale = Math.min(rect.width / 1280, rect.height / 720);
+                            const ax = (rect.width - (1280 * scale)) / 2;
+                            const ay = (rect.height - (720 * scale)) / 2;
                             cursor.style.left = (ax + data.action.x * scale) + 'px';
                             cursor.style.top = (ay + data.action.y * scale) + 'px';
                         }};
                         if (screenshot.complete) updateCursor();
                         else screenshot.addEventListener('load', updateCursor, {{ once: true }});
-                    }} else {{
+                    }} else if (cursor) {{
                         cursor.style.display = 'none';
                     }}
                 }}
             }}
             
-            evtSource.onmessage = function(event) {{
-                const msg = JSON.parse(event.data);
-                if (msg.type === 'full_state') {{
-                    let anyActive = false;
-                    for (const [id, agent] of Object.entries(msg.data)) {{
-                        updateAgent(id, agent);
-                        if (agent.status === 'running') anyActive = true;
-                    }}
-                    if (anyActive) {{
-                        globalStatus.className = "global-status-dock active";
-                        globalStatusText.innerText = "SWARM ACTIVE";
-                    }} else {{
+            // Also listen to main state for synthesis
+            const mainEvtSource = new EventSource("/stream");
+            mainEvtSource.onmessage = function(event) {{
+                const data = JSON.parse(event.data);
+                if (data.synthesis) {{
+                    showSynthesis(data);
+                    resetUI();
+                    globalStatusText.innerText = "COMPLETE";
+                }}
+                if (data.result && data.status === 'success') {{
+                    // Extract synthesis from result if present
+                    if (typeof data.result === 'string' && data.result.includes('Orchestrated Swarm Complete')) {{
+                        globalStatusText.innerText = "COMPLETE";
                         resetUI();
                     }}
-                }} else if (msg.type === 'update') {{
-                    updateAgent(msg.agent_id, msg.data);
                 }}
             }};
         </script>
