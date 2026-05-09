@@ -14,7 +14,7 @@ import httpx
 from rich.console import Console
 from tzafon import Lightcone
 
-from cua_loop.action_verifier import verify_action_effect
+from cua_loop.action_verifier import LoopBreaker, verify_action_effect
 from cua_loop.approval import approval_event, approval_result
 from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.dom_extractor import extract_listings
@@ -132,7 +132,6 @@ def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, ch
         httpx.post(
             url,
             json={
-                "agent_id": agent_id,
                 "step": step,
                 "task": task,
                 "screenshot_url": screenshot_url,
@@ -190,6 +189,11 @@ def _is_stuck(history: list[tuple[str, int, int]]) -> bool:
         return False
     window = history[-_STUCK_WINDOW:]
     return len(set(window)) == 1
+
+
+def _denorm(mx: int, my: int) -> tuple[int, int]:
+    """Convert model coordinates (0-999 space) to screen pixel coordinates."""
+    return int(mx * DISPLAY_WIDTH / 999), int(my * DISPLAY_HEIGHT / 999)
 
 
 def _execute_action(b: BrowserBackend, action: Any) -> bool:
@@ -383,7 +387,7 @@ def run_single_attempt(
                     status="loop_detected",
                     blocked=True,
                     block_reason=loop_check.reason,
-                    agent_id=agent_id,
+                    channel=channel,
                 )
                 console.print(f"[red]loop detected:[/red] {loop_check.reason}")
                 break
