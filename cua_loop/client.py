@@ -16,6 +16,7 @@ from tzafon import Lightcone
 
 from cua_loop.action_verifier import verify_action_effect
 from cua_loop.backends import BrowserBackend, make_backend
+from cua_loop.marketplace import check_marketplace_action_policy
 from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
 
@@ -25,6 +26,7 @@ MODEL = os.getenv("NORTHSTAR_MODEL", "tzafon.northstar-cua-fast")
 DISPLAY_WIDTH = int(os.getenv("CUA_DISPLAY_WIDTH", "1280"))
 DISPLAY_HEIGHT = int(os.getenv("CUA_DISPLAY_HEIGHT", "720"))
 MAX_STEPS = int(os.getenv("CUA_MAX_STEPS", "40"))
+_MARKETPLACE_MODE = os.getenv("AEGIS_MARKETPLACE_MODE", "true").lower() in {"1", "true", "yes"}
 
 TOOLS = [
     {
@@ -177,6 +179,10 @@ def run_single_attempt(
             _notify_ui(step_idx, instruction, screenshot_url, action, status="proposed")
 
             policy = check_action_policy(action, message_text)
+            if policy.allowed and _MARKETPLACE_MODE:
+                mp_policy = check_marketplace_action_policy(action, message_text)
+                if not mp_policy.allowed:
+                    policy = mp_policy
             if not policy.allowed:
                 step.blocked = True
                 step.block_reason = policy.reason
