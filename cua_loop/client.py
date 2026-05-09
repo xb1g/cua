@@ -6,6 +6,7 @@ Returns a Trajectory. Outer retry / verification logic lives in runner.py.
 from __future__ import annotations
 
 import os
+import httpx
 from typing import Any
 
 from rich.console import Console
@@ -48,6 +49,16 @@ def _action_to_dict(action: Any) -> dict[str, Any]:
     )
     return {k: getattr(action, k, None) for k in keys if getattr(action, k, None) is not None}
 
+def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None):
+    try:
+        httpx.post("http://localhost:8000/update", json={
+            "step": step,
+            "task": task,
+            "screenshot_url": screenshot_url,
+            "action": _action_to_dict(action) if action else {}
+        }, timeout=0.2)
+    except Exception:
+        pass
 
 def _execute_action(computer: Any, action: Any) -> bool:
     """Dispatch a Northstar action onto the Lightcone computer.
@@ -101,6 +112,7 @@ def run_single_attempt(
     with client.computer.create(kind=kind) as computer:
         screenshot = computer.screenshot()
         screenshot_url = computer.get_screenshot_url(screenshot)
+        _notify_ui(0, instruction, screenshot_url)
 
         response = client.responses.create(
             model=MODEL,
@@ -146,6 +158,7 @@ def run_single_attempt(
                 )
             )
             console.print(f"[cyan]step {step_idx}[/cyan] {action.type} {_action_to_dict(action)}")
+            _notify_ui(step_idx, instruction, screenshot_url, action)
 
             terminated = _execute_action(computer, action)
             if terminated:
