@@ -1,0 +1,47 @@
+[
+  {
+    "query": "used couch under $200",
+    "marketplace": "craigslist",
+    "category": "furniture",
+    "config": "no-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 1,
+    "duration_s": 42.7,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "No structured data; agent described listing in text",
+    "error": null
+  },
+  {
+    "query": "iPhone 14 Pro under $500",
+    "marketplace": "mercari",
+    "category": "electronics",
+    "config": "no-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 1,
+    "duration_s": 49.8,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "No data extracted; agent stuck in find bar",
+    "error": null
+  },
+  {
+    "query": "Fender Stratocaster under $800",
+    "marketplace": "reverb",
+    "category": "instruments",
+    "config": "no-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 1,
+    "duration_s": 20.0,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "Loop detected, keypress stuck",
+    "error": "loop detected: keypress repeated 3 times"
+  }
+]
