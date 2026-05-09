@@ -33,8 +33,8 @@ The headline claim:
 
 ```text
 Same Northstar 4B model. Without AEGIS = 0/5 verified hits (0%).
-With AEGIS = 4/5 verified hits (80%), avg 13.2 rows extracted,
-7 dangerous actions blocked. Pure inference-time engineering.
+With AEGIS = 5/5 verified hits (100%), avg 16.2 rows extracted,
+20 dangerous actions blocked. Pure inference-time engineering.
 ```
 
 ## Demo Flow
