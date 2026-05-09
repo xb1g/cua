@@ -512,6 +512,20 @@ def run_single_attempt(
                         "content": loop_el_map,
                     })
 
+            if _DOM_EXTRACTION and (step_idx > 0 and (step_idx % 5 == 0 or action.type == "scroll")):
+                marketplace_name = _detect_marketplace_from_url(traj.url) if _detect_marketplace_from_url else None
+                mid_listings = extract_listings(b, marketplace=marketplace_name)
+                if len(mid_listings) >= 5:
+                    call_output_input.append({
+                        "role": "user",
+                        "content": (
+                            f"[SYSTEM: {len(mid_listings)} listings detected on this page via DOM extraction. "
+                            "You may terminate now — the data will be captured automatically after you stop. "
+                            "Say 'done' or use the terminate action.]"
+                        ),
+                    })
+                    console.print(f"[blue]mid-loop DOM check:[/blue] {len(mid_listings)} listings found — signaling model to terminate")
+
             response = lightcone.responses.create(
                 model=MODEL,
                 previous_response_id=response.id,
