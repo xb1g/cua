@@ -68,6 +68,7 @@ def run_fallback_extraction(
                 b.wait(3)
 
             _dismiss_overlays(b)
+            _wait_for_listings(b, marketplace)
 
             listings = scroll_and_accumulate(
                 b, marketplace=marketplace, max_pages=max_pages, max_items=max_items
@@ -82,6 +83,29 @@ def run_fallback_extraction(
     except Exception as exc:
         console.print(f"[red]fallback extraction failed:[/red] {exc}")
         return []
+
+
+_LISTING_WAIT_SELECTORS: dict[str, str] = {
+    "craigslist": ".cl-static-search-result, .result-row, li.result-node, .cl-search-result",
+    "ebay": ".s-item, .srp-results li",
+    "mercari": "[data-testid='ItemContainer'], [data-testid='SearchResults']",
+    "offerup": "[class*='ItemTile'], article",
+    "reverb": ".rc-listing-card, .grid-card",
+}
+
+
+def _wait_for_listings(backend: BrowserBackend, marketplace: str | None) -> None:
+    sel = _LISTING_WAIT_SELECTORS.get(marketplace or "")
+    if not sel:
+        return
+    wait_js = f"""
+    await page.waitForSelector({sel!r}, {{ timeout: 8000 }}).catch(() => {{}});
+    return null;
+    """
+    try:
+        backend.execute_playwright(wait_js)
+    except Exception:
+        pass
 
 
 def _dismiss_overlays(backend) -> None:
