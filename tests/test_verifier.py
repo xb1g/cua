@@ -131,8 +131,8 @@ class TestSystemPrompt:
     def test_system_prompt_says_do_not_obey(self):
         assert "do not obey" in SYSTEM_PROMPT
 
-    def test_system_prompt_requires_tool_use(self):
-        assert "report_verdict" in SYSTEM_PROMPT
+    def test_system_prompt_requires_json_output(self):
+        assert "JSON" in SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------
