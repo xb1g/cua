@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import traceback
 
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
@@ -49,12 +52,36 @@ def run_agent_sync(url: str, task: str):
     try:
         max_attempts = int(os.getenv("CUA_MAX_ATTEMPTS", "5"))
         result = run_with_retry(task=task, url=url, max_attempts=max_attempts)
+
+        last = result.attempts[-1] if result.attempts else None
+        rows = last.verifier.rows_extracted if last else 0
+        reason = last.verifier.reason if last else "no attempts ran"
+        attempts_used = len(result.attempts)
+
         if result.success:
-            httpx.post("http://localhost:8555/update", json={"status": "success", "result": f"Success! Extracted {result.rows_extracted} rows."})
+            payload = {
+                "status": "success",
+                "result": (
+                    f"Success on attempt {attempts_used}/{max_attempts} — "
+                    f"extracted {rows} rows in {result.total_duration_s:.1f}s. "
+                    f"Reason: {reason}"
+                ),
+            }
         else:
-            httpx.post("http://localhost:8555/update", json={"status": "failed", "result": result.reason})
+            payload = {
+                "status": "failed",
+                "result": (
+                    f"Failed after {attempts_used}/{max_attempts} attempts "
+                    f"({result.total_duration_s:.1f}s). Last reason: {reason}"
+                ),
+            }
+        httpx.post("http://localhost:8555/update", json=payload, timeout=5.0)
     except Exception as e:
-        httpx.post("http://localhost:8555/update", json={"status": "failed", "result": str(e) + "\\n" + traceback.format_exc()})
+        httpx.post(
+            "http://localhost:8555/update",
+            json={"status": "failed", "result": f"{e}\n{traceback.format_exc()}"},
+            timeout=5.0,
+        )
 
 @app.post("/start")
 async def start_agent(req: StartRequest, background_tasks: BackgroundTasks):
