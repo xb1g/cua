@@ -64,6 +64,8 @@ ActionCategory = Literal[
     "outbound_message",
     "credential_entry",
     "prompt_injection",
+    "domain_blocked",
+    "xss_attempt",
 ]
 
 _CATEGORY_PATTERNS: list[tuple[ActionCategory, tuple[str, ...]]] = [
@@ -93,7 +95,125 @@ _CATEGORY_VERDICTS: dict[ActionCategory, Literal["approve", "block"]] = {
     "outbound_message": "approve",
     "credential_entry": "approve",
     "prompt_injection": "block",
+    "domain_blocked": "block",
+    "xss_attempt": "block",
 }
+
+
+# ---------------------------------------------------------------------------
+# Domain boundary enforcement
+# ---------------------------------------------------------------------------
+
+ALLOWED_DOMAINS: set[str] = set()
+_allowed = os.getenv("AEGIS_ALLOWED_DOMAINS", "")
+if _allowed:
+    ALLOWED_DOMAINS.update(d.strip().lower() for d in _allowed.split(",") if d.strip())
+
+BLOCKED_DOMAINS: set[str] = {
+    "evil.com",
+    "malware.com",
+    "phishing.com",
+    "exfil.com",
+    "steal-data.com",
+}
+_blocked = os.getenv("AEGIS_BLOCKED_DOMAINS", "")
+if _blocked:
+    BLOCKED_DOMAINS.update(d.strip().lower() for d in _blocked.split(",") if d.strip())
+
+_SUSPICIOUS_TLDS = {".tk", ".ml", ".ga", ".cf", ".gq", ".buzz", ".top", ".xyz", ".click", ".loan", ".work"}
+
+
+def check_domain(url: str) -> SecurityVerdict | None:
+    if re.match(r"(?i)javascript\s*:", url):
+        return SecurityVerdict(
+            verdict="block",
+            reason="xss_attempt: javascript: URI detected",
+            category="xss_attempt",
+            matched_rule="javascript_uri",
+        )
+
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower()
+    except Exception:
+        return SecurityVerdict(
+            verdict="block",
+            reason="domain_blocked: malformed URL",
+            category="domain_blocked",
+            matched_rule="malformed_url",
+        )
+
+    if not hostname:
+        return None
+
+    for blocked in BLOCKED_DOMAINS:
+        if hostname == blocked or hostname.endswith("." + blocked):
+            return SecurityVerdict(
+                verdict="block",
+                reason=f"domain_blocked: {hostname} is on the blocklist",
+                category="domain_blocked",
+                matched_rule=f"blocklist:{blocked}",
+            )
+
+    if ALLOWED_DOMAINS:
+        if not any(hostname == d or hostname.endswith("." + d) for d in ALLOWED_DOMAINS):
+            return SecurityVerdict(
+                verdict="block",
+                reason=f"domain_blocked: {hostname} is not on the allowlist",
+                category="domain_blocked",
+                matched_rule="allowlist_miss",
+            )
+
+    for tld in _SUSPICIOUS_TLDS:
+        if hostname.endswith(tld):
+            return SecurityVerdict(
+                verdict="block",
+                reason=f"domain_blocked: suspicious TLD {tld} — {hostname}",
+                category="domain_blocked",
+                matched_rule=f"suspicious_tld:{tld}",
+            )
+
+    if parsed.scheme == "javascript":
+        return SecurityVerdict(
+            verdict="block",
+            reason="xss_attempt: javascript: URI detected",
+            category="xss_attempt",
+            matched_rule="javascript_uri",
+        )
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# XSS / script injection detection
+# ---------------------------------------------------------------------------
+
+_XSS_PATTERNS = (
+    r"<script[\s>]",
+    r"javascript\s*:",
+    r"\balert\s*\(",
+    r"\bconfirm\s*\(",
+    r"\bprompt\s*\(",
+    r"on(load|error|click|mouseover|focus|submit)\s*=",
+    r"document\.(cookie|location|write)",
+    r"window\.(location|open)\s*[=(]",
+    r"eval\s*\(",
+    r"\bfetch\s*\(",
+    r"new\s+Image\s*\(\s*\)\s*\.src",
+    r"<iframe[\s>]",
+    r"<img[^>]+onerror",
+    r"String\.fromCharCode",
+    r"atob\s*\(",
+)
+
+
+def detect_xss(*texts: str | None) -> str | None:
+    raw = "\n".join(t or "" for t in texts)
+    haystack = _normalize_text(raw).lower()
+    for pattern in _XSS_PATTERNS:
+        if re.search(pattern, haystack):
+            return f"xss pattern matched: {pattern}"
+    return None
 
 TRUSTED_ORIGINS: set[str] = {
     "accounts.google.com",
@@ -173,6 +293,21 @@ def classify_action(
             category="prompt_injection",
             matched_rule=injection,
             requires_human=False,
+        )
+
+    url = getattr(action, "url", None)
+    if url and getattr(action, "type", "") in ("navigate", "goto", "click"):
+        domain_verdict = check_domain(str(url))
+        if domain_verdict is not None:
+            return domain_verdict
+
+    xss = detect_xss(action_text, getattr(action, "text", None), url)
+    if xss:
+        return SecurityVerdict(
+            verdict="block",
+            reason=xss,
+            category="xss_attempt",
+            matched_rule=xss,
         )
 
     for category, patterns in _CATEGORY_PATTERNS:
