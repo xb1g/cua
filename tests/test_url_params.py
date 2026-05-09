@@ -150,17 +150,21 @@ class TestGenerateFiltered:
     def test_generate_all_filtered_urls(self):
         urls = generate_all_filtered_urls(_pq(), skip_login_required=True)
         assert "craigslist" in urls
-        assert "ebay_used" in urls
         assert "mercari" in urls
-        assert "offerup" in urls
         assert "reverb" in urls
+        # high bot-detection sites (ebay, offerup) skipped by default
         assert "fb_marketplace" not in urls  # login required, skipped
         for url in urls.values():
             assert "http" in url
 
     def test_generate_all_includes_fb_when_not_skipping(self):
-        urls = generate_all_filtered_urls(_pq(), skip_login_required=False)
-        assert "fb_marketplace" in urls
+        import os
+        os.environ["AEGIS_SKIP_HIGH_DETECTION"] = "false"
+        try:
+            urls = generate_all_filtered_urls(_pq(), skip_login_required=False)
+            assert "fb_marketplace" in urls
+        finally:
+            os.environ["AEGIS_SKIP_HIGH_DETECTION"] = "true"
 
     def test_all_urls_have_price_filter(self):
         urls = generate_all_filtered_urls(_pq(max_price=800.0))
