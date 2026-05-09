@@ -22,6 +22,7 @@ critic = [
 
 [project.scripts]
 cua-loop = "cua_loop.demo:main"
+cua-ui = "cua_loop.ui_server:main"
 
 [build-system]
 requires = ["hatchling"]
