@@ -129,7 +129,7 @@ def plot_loss_curve(log_history: list[dict[str, Any]], output_path: Path = DEFAU
     ax.set_ylabel("Loss")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig(output_path)
+    fig.savefig(str(output_path))
     plt.close(fig)
 
 
