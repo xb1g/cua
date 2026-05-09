@@ -49,6 +49,7 @@ def run_with_retry(
     task: str,
     url: str | None = None,
     max_attempts: int = MAX_ATTEMPTS,
+    channel: str = "",
 ) -> RunResult:
     """Run the inner CUA loop up to N times. Self-critique on each failure."""
     started = time.time()
@@ -63,6 +64,7 @@ def run_with_retry(
                 task=task,
                 url=url,
                 extra_context=_critique_for_next(failure_summaries),
+                channel=channel,
             )
         except Exception as e:
             console.print(f"[red]inner loop crashed: {e}[/red]")

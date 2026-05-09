@@ -1,11 +1,12 @@
 import os
 import asyncio
 import json
+import time
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import traceback
 
 from dotenv import load_dotenv
@@ -14,35 +15,282 @@ load_dotenv(override=True)
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-state = {
-    "screenshot_url": "",
-    "action": {},
-    "step": 0,
-    "task": "",
-    "status": "idle", # idle, running, success, failed
-    "result": "",
-    "verification_passed": None,
-    "verification_reason": "",
-    "blocked": False,
-    "block_reason": "",
+# ── Shared CSS block reused by all pages ──────────────────────────────────────
+SHARED_CSS = """
+:root {
+    --bg-color: #0f172a;
+    --panel-bg: rgba(30, 41, 59, 0.7);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #8b5cf6;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
 }
+body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 0; min-height: 100vh; background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 70%); }
+.glass-panel { background: var(--panel-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--panel-border); border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+"""
 
+NAV_HTML = """
+<nav style="width:100%;padding:8px 40px;box-sizing:border-box;display:flex;gap:24px;align-items:center;border-bottom:1px solid rgba(255,255,255,0.06);">
+    <a href="/" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Studio</a>
+    <a href="/split" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Split Compare</a>
+    <a href="/bargains" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Bargain Board</a>
+    <a href="/verdicts" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Verdict Feed</a>
+    <a href="/browsers" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Browser Grid</a>
+</nav>
+"""
+
+def _default_state():
+    return {
+        "screenshot_url": "",
+        "action": {},
+        "step": 0,
+        "task": "",
+        "status": "idle",
+        "result": "",
+        "verification_passed": None,
+        "verification_reason": "",
+        "blocked": False,
+        "block_reason": "",
+    }
+
+# ── Original studio state ────────────────────────────────────────────────────
+state = _default_state()
 clients = set()
+
+# ── Split-screen state (raw / aegis channels) ────────────────────────────────
+state_raw = _default_state()
+state_aegis = _default_state()
+clients_raw: set = set()
+clients_aegis: set = set()
+
+# ── Verdict feed state ───────────────────────────────────────────────────────
+verdict_log: list[dict] = []
+verdict_clients: set = set()
+
+# ── Browser grid state ───────────────────────────────────────────────────────
+browser_sessions: list[dict] = []
+
+# ── Bargain board state ──────────────────────────────────────────────────────
+bargain_listings: list[dict] = []
 
 async def broadcast(data):
     for q in clients:
         await q.put(data)
 
+async def broadcast_raw(data):
+    for q in clients_raw:
+        await q.put(data)
+
+async def broadcast_aegis(data):
+    for q in clients_aegis:
+        await q.put(data)
+
+async def broadcast_verdicts(data):
+    for q in verdict_clients:
+        await q.put(data)
+
 @app.post("/update")
-async def update_state(data: dict):
-    state.update({k: v for k, v in data.items() if v is not None})
-    await broadcast(state)
+async def update_state(request: Request, data: dict):
+    channel = request.query_params.get("channel", "")
+    if channel == "raw":
+        state_raw.update({k: v for k, v in data.items() if v is not None})
+        await broadcast_raw(state_raw)
+    elif channel == "aegis":
+        state_aegis.update({k: v for k, v in data.items() if v is not None})
+        await broadcast_aegis(state_aegis)
+    else:
+        state.update({k: v for k, v in data.items() if v is not None})
+        await broadcast(state)
     return {"status": "ok"}
 
 class StartRequest(BaseModel):
     task: str
     url: str | None = None
 
+class VerdictEntry(BaseModel):
+    type: str
+    result: str
+    reason: str
+    details: dict = Field(default_factory=dict)
+
+class BrowserRegistration(BaseModel):
+    id: str
+    live_view_url: str
+    marketplace: str = ""
+
+# ── Browser grid API ─────────────────────────────────────────────────────────
+@app.post("/api/browsers")
+async def register_browser(reg: BrowserRegistration):
+    for s in browser_sessions:
+        if s["id"] == reg.id:
+            s["live_view_url"] = reg.live_view_url
+            s["marketplace"] = reg.marketplace
+            return {"status": "updated"}
+    browser_sessions.append({
+        "id": reg.id,
+        "live_view_url": reg.live_view_url,
+        "marketplace": reg.marketplace,
+        "created_at": time.strftime("%H:%M:%S"),
+    })
+    return {"status": "registered", "count": len(browser_sessions)}
+
+@app.get("/api/browsers")
+async def list_browsers():
+    return JSONResponse(browser_sessions)
+
+@app.delete("/api/browsers/{browser_id}")
+async def remove_browser(browser_id: str):
+    before = len(browser_sessions)
+    browser_sessions[:] = [s for s in browser_sessions if s["id"] != browser_id]
+    return {"removed": before - len(browser_sessions)}
+
+# ── Verdict feed API ─────────────────────────────────────────────────────────
+@app.post("/api/verdicts")
+async def post_verdict(entry: VerdictEntry):
+    record = {
+        "type": entry.type,
+        "result": entry.result,
+        "reason": entry.reason,
+        "details": entry.details,
+        "ts": time.strftime("%H:%M:%S"),
+    }
+    verdict_log.insert(0, record)
+    if len(verdict_log) > 200:
+        verdict_log[:] = verdict_log[:200]
+    await broadcast_verdicts(record)
+    return {"status": "ok", "count": len(verdict_log)}
+
+@app.get("/api/verdicts")
+async def list_verdicts():
+    return JSONResponse(verdict_log)
+
+@app.get("/api/verdicts/stream")
+async def verdict_stream(request: Request):
+    async def gen():
+        q: asyncio.Queue = asyncio.Queue()
+        verdict_clients.add(q)
+        try:
+            yield f"data: {json.dumps(verdict_log[:20])}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            verdict_clients.discard(q)
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+# ── Bargain board API ────────────────────────────────────────────────────────
+def _mock_bargain_data():
+    return [
+        {"listing": {"title": "Herman Miller Aeron Chair - Size B", "price": 485, "marketplace": "craigslist", "distance_mi": 3.2, "photo_count": 6, "seller": "mike_furnishings", "posted_age_text": "2 hours ago", "condition": "pre-owned", "raw_url": "#"}, "score": 87.4, "accepted": True, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": False, "reasons": ["within budget: $485.00", "listing recent (<24h)", "4+ photos", "within radius: 3mi"]},
+        {"listing": {"title": "Vintage Eames Shell Chair - Fiberglass", "price": 320, "marketplace": "ebay", "distance_mi": None, "photo_count": 8, "seller": "retro_finds_99", "posted_age_text": "5 hours ago", "condition": "used", "raw_url": "#"}, "score": 79.1, "accepted": True, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": False, "reasons": ["within budget: $320.00", "4+ photos", "used-as-default (second-hand marketplace)"]},
+        {"listing": {"title": "West Elm Mid-Century Nightstand - Walnut", "price": 145, "marketplace": "offerup", "distance_mi": 7.8, "photo_count": 4, "seller": "sarah_m", "posted_age_text": "yesterday", "condition": "good", "raw_url": "#"}, "score": 74.6, "accepted": True, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": False, "reasons": ["within budget: $145.00", "listing recent (<24h)", "4+ photos", "within radius: 8mi"]},
+        {"listing": {"title": "Fender Player Stratocaster MIM 2021", "price": 525, "marketplace": "reverb", "distance_mi": None, "photo_count": 12, "seller": "guitar_depot", "posted_age_text": "3 hours ago", "condition": "excellent", "raw_url": "#"}, "score": 72.0, "accepted": True, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": False, "reasons": ["within budget: $525.00", "4+ photos", "listing recent (<24h)"]},
+        {"listing": {"title": "CB2 Sven Sofa - Charcoal", "price": 680, "marketplace": "fb_marketplace", "distance_mi": 4.1, "photo_count": 5, "seller": "jen_decor", "posted_age_text": "today", "condition": "like new", "raw_url": "#"}, "score": 68.2, "accepted": True, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": False, "reasons": ["within budget: $680.00", "4+ photos", "within radius: 4mi"]},
+        {"listing": {"title": "Dyson V15 Detect Cordless Vacuum", "price": 299, "marketplace": "mercari", "distance_mi": None, "photo_count": 3, "seller": "clean_deals", "posted_age_text": "6 hours ago", "condition": "open box", "raw_url": "#"}, "score": 63.5, "accepted": True, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": False, "reasons": ["within budget: $299.00", "listing recent (<24h)"]},
+        {"listing": {"title": "MCM Style Lounge Chair - Inspired by Eames", "price": 220, "marketplace": "fb_marketplace", "distance_mi": 8.3, "photo_count": 2, "seller": "deals4u_2024", "posted_age_text": "3 days ago", "condition": "new", "raw_url": "#"}, "score": 42.1, "accepted": False, "is_replica_suspected": True, "is_scam_suspected": False, "is_stale": False, "reasons": ["rejected: replica/knockoff and user requested authentic", "within radius: 8mi"]},
+        {"listing": {"title": "Vintage Desk Lamp - Mid Century MUST SHIP zelle only", "price": 95, "marketplace": "craigslist", "distance_mi": None, "photo_count": 1, "seller": "quicksale_now", "posted_age_text": "1 hours ago", "condition": "used", "raw_url": "#"}, "score": -12.8, "accepted": False, "is_replica_suspected": False, "is_scam_suspected": True, "is_stale": False, "reasons": ["rejected: scam-pattern phrasing matched", "zero photos (high scam risk)"]},
+        {"listing": {"title": "IKEA Kallax Shelf 4x4 White", "price": 45, "marketplace": "offerup", "distance_mi": 2.1, "photo_count": 3, "seller": "moving_sale_sf", "posted_age_text": "3 months ago", "condition": "fair", "raw_url": "#"}, "score": 38.9, "accepted": False, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": True, "reasons": ["listing >1 month old", "within radius: 2mi"]},
+        {"listing": {"title": "Knoll Wassily Chair - Leather", "price": 890, "marketplace": "ebay", "distance_mi": None, "photo_count": 7, "seller": "design_classics", "posted_age_text": "2 hours ago", "condition": "pre-owned", "raw_url": "#"}, "score": 31.5, "accepted": False, "is_replica_suspected": False, "is_scam_suspected": False, "is_stale": False, "reasons": ["over budget after shipping: $890.00 > $800.00", "4+ photos"]},
+    ]
+
+@app.post("/api/bargains")
+async def post_bargains(data: list[dict]):
+    bargain_listings.clear()
+    bargain_listings.extend(data)
+    return {"status": "ok", "count": len(bargain_listings)}
+
+@app.get("/api/bargains")
+async def get_bargains():
+    if not bargain_listings:
+        return JSONResponse(_mock_bargain_data())
+    return JSONResponse(bargain_listings)
+
+# ── Split-screen SSE endpoints ───────────────────────────────────────────────
+def _make_sse_endpoint(target_state, target_clients):
+    async def sse(request: Request):
+        async def gen():
+            q: asyncio.Queue = asyncio.Queue()
+            target_clients.add(q)
+            try:
+                yield f"data: {json.dumps(target_state)}\n\n"
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        data = await asyncio.wait_for(q.get(), timeout=15.0)
+                        yield f"data: {json.dumps(data)}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+            finally:
+                target_clients.discard(q)
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return sse
+
+app.get("/split/stream/raw")(_make_sse_endpoint(state_raw, clients_raw))
+app.get("/split/stream/aegis")(_make_sse_endpoint(state_aegis, clients_aegis))
+
+# ── Split-screen agent runners ───────────────────────────────────────────────
+def run_split_raw_sync(url: str | None, task: str):
+    import httpx
+    from cua_loop.client import run_single_attempt
+    try:
+        traj = run_single_attempt(task=task, url=url, channel="raw", skip_safety=True)
+        httpx.post("http://localhost:8555/update?channel=raw",
+                   json={"status": "failed", "result": f"Raw CUA finished after {len(traj.steps)} steps. {traj.error or traj.final_message or 'No safety checks applied.'}"},
+                   timeout=5.0)
+    except Exception as e:
+        httpx.post("http://localhost:8555/update?channel=raw",
+                   json={"status": "failed", "result": f"{e}"},
+                   timeout=5.0)
+
+def run_split_aegis_sync(url: str | None, task: str):
+    import httpx
+    from cua_loop.runner import run_with_retry
+    try:
+        max_attempts = int(os.getenv("CUA_MAX_ATTEMPTS", "5"))
+        result = run_with_retry(task=task, url=url, max_attempts=max_attempts, channel="aegis")
+        last = result.attempts[-1] if result.attempts else None
+        rows = last.verifier.rows_extracted if last else 0
+        reason = last.verifier.reason if last else "no attempts ran"
+        status = "success" if result.success else "failed"
+        httpx.post("http://localhost:8555/update?channel=aegis",
+                   json={"status": status, "result": f"AEGIS: {status} — {rows} rows in {result.total_duration_s:.1f}s. {reason}"},
+                   timeout=5.0)
+    except Exception as e:
+        httpx.post("http://localhost:8555/update?channel=aegis",
+                   json={"status": "failed", "result": f"{e}"},
+                   timeout=5.0)
+
+@app.post("/split/start")
+async def start_split(req: StartRequest):
+    for s in (state_raw, state_aegis):
+        s.update(_default_state())
+        s["status"] = "running"
+        s["task"] = req.task
+    await broadcast_raw(state_raw)
+    await broadcast_aegis(state_aegis)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, run_split_raw_sync, req.url, req.task)
+    loop.run_in_executor(None, run_split_aegis_sync, req.url, req.task)
+    return {"status": "started"}
+
+# ── Original agent runner ────────────────────────────────────────────────────
 def run_agent_sync(url: str | None, task: str):
     import httpx
     from cua_loop.runner import run_with_retry
@@ -422,6 +670,411 @@ async def index():
     </body>
     </html>
     """
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 19: KERNEL Live-View IFrame Grid
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/browsers", response_class=HTMLResponse)
+async def browsers_page():
+    return f"""<!DOCTYPE html><html><head>
+    <title>AEGIS - KERNEL Browser Grid</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    {SHARED_CSS}
+    .page-header {{ width:100%; padding:16px 40px; box-sizing:border-box; display:flex; justify-content:space-between; align-items:center; }}
+    .page-header h1 {{ font-size:22px; margin:0; font-weight:700; letter-spacing:-0.02em; background:linear-gradient(135deg,#fff 0%,#cbd5e1 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
+    .page-header .count {{ font-size:16px; color:var(--primary); font-weight:600; }}
+    .browser-grid {{ display:grid; gap:8px; padding:8px 40px 40px; height:calc(100vh - 120px); }}
+    .tile {{ border-radius:12px; overflow:hidden; border:1px solid var(--panel-border); background:rgba(30,41,59,0.5); display:flex; flex-direction:column; }}
+    .tile-header {{ padding:6px 12px; background:rgba(15,23,42,0.8); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--panel-border); }}
+    .tile-header .idx {{ font-size:13px; font-weight:700; color:var(--primary); }}
+    .tile-header .mp {{ font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; }}
+    .tile iframe {{ flex:1; width:100%; border:none; background:#000; }}
+    .empty-state {{ display:flex; align-items:center; justify-content:center; height:calc(100vh - 120px); }}
+    .empty-state p {{ font-size:18px; color:var(--text-muted); text-align:center; line-height:1.6; }}
+    </style></head><body>
+    {NAV_HTML}
+    <div class="page-header">
+        <h1>KERNEL Browser Grid</h1>
+        <div class="count" id="count">0 active</div>
+    </div>
+    <div id="grid-container"></div>
+    <script>
+    let lastJson = "";
+    function getCols(n) {{
+        if (n <= 2) return 1;
+        if (n <= 4) return 2;
+        if (n <= 9) return 3;
+        if (n <= 16) return 4;
+        return 6;
+    }}
+    async function refresh() {{
+        try {{
+            const res = await fetch("/api/browsers");
+            const browsers = await res.json();
+            const j = JSON.stringify(browsers);
+            if (j === lastJson) return;
+            lastJson = j;
+            const container = document.getElementById("grid-container");
+            document.getElementById("count").textContent = browsers.length + " active";
+            if (browsers.length === 0) {{
+                container.innerHTML = '<div class="empty-state"><p>No KERNEL browser sessions active.<br>Sessions register automatically when agents start.</p></div>';
+                container.className = "";
+                return;
+            }}
+            container.className = "browser-grid";
+            const cols = getCols(browsers.length);
+            container.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
+            container.innerHTML = browsers.map((b, i) =>
+                '<div class="tile"><div class="tile-header"><span class="idx">#' + (i+1) + '</span><span class="mp">' +
+                (b.marketplace || "browser") + '</span></div><iframe src="' +
+                b.live_view_url + (b.live_view_url.includes("?") ? "&" : "?") + 'readOnly=true" loading="lazy"></iframe></div>'
+            ).join("");
+        }} catch(e) {{}}
+    }}
+    refresh();
+    setInterval(refresh, 5000);
+    </script></body></html>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 18: Verdict Feed
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/verdicts", response_class=HTMLResponse)
+async def verdicts_page():
+    return f"""<!DOCTYPE html><html><head>
+    <title>AEGIS - Verdict Feed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    {SHARED_CSS}
+    .page-header {{ width:100%; padding:16px 40px; box-sizing:border-box; display:flex; justify-content:space-between; align-items:center; }}
+    .page-header h1 {{ font-size:22px; margin:0; font-weight:700; letter-spacing:-0.02em; background:linear-gradient(135deg,#fff 0%,#cbd5e1 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
+    .stats {{ display:flex; gap:16px; }}
+    .stat {{ font-size:14px; font-weight:600; padding:4px 12px; border-radius:99px; }}
+    .stat-pass {{ background:rgba(16,185,129,0.1); color:#34d399; border:1px solid rgba(16,185,129,0.2); }}
+    .stat-fail {{ background:rgba(239,68,68,0.1); color:#f87171; border:1px solid rgba(239,68,68,0.2); }}
+    .stat-warn {{ background:rgba(245,158,11,0.1); color:#fbbf24; border:1px solid rgba(245,158,11,0.2); }}
+    .feed {{ display:flex; flex-direction:column; gap:8px; padding:8px 40px 40px; max-height:calc(100vh - 120px); overflow-y:auto; }}
+    .verdict-card {{ display:flex; align-items:flex-start; gap:16px; padding:14px 20px; border-radius:12px; background:var(--panel-bg); border:1px solid var(--panel-border); border-left:4px solid transparent; animation:slideIn 0.3s ease; }}
+    .verdict-card.r-PASSED {{ border-left-color:var(--success); }}
+    .verdict-card.r-BLOCKED,.verdict-card.r-REJECTED {{ border-left-color:var(--danger); }}
+    .verdict-card.r-WARNING {{ border-left-color:var(--warning); }}
+    .v-badges {{ display:flex; gap:8px; align-items:center; min-width:200px; }}
+    .v-type {{ font-size:11px; font-weight:700; padding:3px 10px; border-radius:6px; text-transform:uppercase; letter-spacing:0.05em; }}
+    .t-VERIFIER {{ background:rgba(139,92,246,0.15); color:#a78bfa; }}
+    .t-SECURITY {{ background:rgba(59,130,246,0.15); color:#60a5fa; }}
+    .t-MARKETPLACE {{ background:rgba(245,158,11,0.15); color:#fbbf24; }}
+    .t-SCANNER {{ background:rgba(16,185,129,0.15); color:#34d399; }}
+    .v-result {{ font-size:12px; font-weight:700; padding:3px 10px; border-radius:6px; }}
+    .v-result.r-PASSED {{ background:rgba(16,185,129,0.15); color:#34d399; }}
+    .v-result.r-BLOCKED,.v-result.r-REJECTED {{ background:rgba(239,68,68,0.15); color:#f87171; }}
+    .v-result.r-WARNING {{ background:rgba(245,158,11,0.15); color:#fbbf24; }}
+    .v-reason {{ flex:1; font-size:14px; color:var(--text-main); line-height:1.4; }}
+    .v-ts {{ font-size:12px; color:var(--text-muted); min-width:70px; text-align:right; font-family:monospace; }}
+    @keyframes slideIn {{ from {{ opacity:0; transform:translateY(-8px); }} to {{ opacity:1; transform:translateY(0); }} }}
+    .empty-state {{ display:flex; align-items:center; justify-content:center; height:calc(100vh - 120px); }}
+    .empty-state p {{ font-size:18px; color:var(--text-muted); text-align:center; line-height:1.6; }}
+    </style></head><body>
+    {NAV_HTML}
+    <div class="page-header">
+        <h1>AEGIS Verdict Feed</h1>
+        <div class="stats">
+            <span class="stat stat-pass" id="s-pass">0 passed</span>
+            <span class="stat stat-fail" id="s-fail">0 blocked</span>
+            <span class="stat stat-warn" id="s-warn">0 warnings</span>
+        </div>
+    </div>
+    <div class="feed" id="feed"></div>
+    <script>
+    let counts = {{pass:0, fail:0, warn:0}};
+    function updateStats() {{
+        document.getElementById("s-pass").textContent = counts.pass + " passed";
+        document.getElementById("s-fail").textContent = counts.fail + " blocked";
+        document.getElementById("s-warn").textContent = counts.warn + " warnings";
+    }}
+    function renderCard(v) {{
+        const card = document.createElement("div");
+        card.className = "verdict-card r-" + v.result;
+        card.innerHTML =
+            '<div class="v-badges"><span class="v-type t-' + v.type + '">' + v.type + '</span>' +
+            '<span class="v-result r-' + v.result + '">' + v.result + '</span></div>' +
+            '<div class="v-reason">' + v.reason + '</div>' +
+            '<div class="v-ts">' + (v.ts || "") + '</div>';
+        if (v.result === "PASSED") counts.pass++;
+        else if (v.result === "WARNING") counts.warn++;
+        else counts.fail++;
+        updateStats();
+        return card;
+    }}
+    async function loadExisting() {{
+        try {{
+            const res = await fetch("/api/verdicts");
+            const verdicts = await res.json();
+            const feed = document.getElementById("feed");
+            if (verdicts.length === 0) {{
+                feed.innerHTML = '<div class="empty-state"><p>No verdicts yet.<br>Verdicts appear as AEGIS processes listings.</p></div>';
+                return;
+            }}
+            verdicts.forEach(v => feed.appendChild(renderCard(v)));
+        }} catch(e) {{}}
+    }}
+    loadExisting();
+    const sse = new EventSource("/api/verdicts/stream");
+    sse.onmessage = function(event) {{
+        const data = JSON.parse(event.data);
+        if (Array.isArray(data)) return;
+        const feed = document.getElementById("feed");
+        const empty = feed.querySelector(".empty-state");
+        if (empty) empty.remove();
+        feed.prepend(renderCard(data));
+    }};
+    </script></body></html>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 17: Ranked Bargain Board
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/bargains", response_class=HTMLResponse)
+async def bargains_page():
+    return f"""<!DOCTYPE html><html><head>
+    <title>AEGIS - Bargain Radar Board</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    {SHARED_CSS}
+    .page-header {{ width:100%; padding:16px 40px; box-sizing:border-box; display:flex; justify-content:space-between; align-items:center; }}
+    .page-header h1 {{ font-size:22px; margin:0; font-weight:700; letter-spacing:-0.02em; background:linear-gradient(135deg,#fff 0%,#cbd5e1 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
+    .sort-controls {{ display:flex; gap:8px; }}
+    .sort-btn {{ background:rgba(15,23,42,0.6); border:1px solid var(--panel-border); color:var(--text-muted); padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; font-family:'Inter',sans-serif; text-transform:uppercase; letter-spacing:0.05em; }}
+    .sort-btn.active {{ border-color:var(--primary); color:var(--primary); background:rgba(59,130,246,0.1); }}
+    .bargain-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; padding:8px 40px 40px; }}
+    .listing-card {{ border-radius:14px; background:var(--panel-bg); border:1px solid var(--panel-border); border-left:5px solid var(--text-muted); padding:20px; transition:transform 0.2s, box-shadow 0.2s; }}
+    .listing-card:hover {{ transform:translateY(-2px); box-shadow:0 12px 30px rgba(0,0,0,0.3); }}
+    .listing-card.accepted {{ border-left-color:var(--success); }}
+    .listing-card.rejected {{ border-left-color:var(--danger); }}
+    .listing-card.replica {{ border-left-color:var(--warning); }}
+    .listing-card.scam {{ border-left-color:var(--danger); }}
+    .card-top {{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }}
+    .card-title {{ font-size:16px; font-weight:700; color:var(--text-main); line-height:1.3; flex:1; }}
+    .card-price {{ font-size:22px; font-weight:800; color:var(--success); white-space:nowrap; }}
+    .rejected .card-price {{ color:var(--danger); }}
+    .mp-badge {{ display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:3px 10px; border-radius:6px; text-transform:uppercase; letter-spacing:0.05em; }}
+    .mp-craigslist {{ background:rgba(128,0,255,0.15); color:#c084fc; }}
+    .mp-fb_marketplace {{ background:rgba(59,130,246,0.15); color:#60a5fa; }}
+    .mp-offerup {{ background:rgba(16,185,129,0.15); color:#34d399; }}
+    .mp-mercari {{ background:rgba(239,68,68,0.15); color:#f87171; }}
+    .mp-ebay {{ background:rgba(245,158,11,0.15); color:#fbbf24; }}
+    .mp-reverb {{ background:rgba(139,92,246,0.15); color:#a78bfa; }}
+    .card-meta {{ display:flex; gap:16px; align-items:center; margin:10px 0; font-size:13px; color:var(--text-muted); }}
+    .card-meta span {{ display:flex; align-items:center; gap:4px; }}
+    .score-row {{ display:flex; align-items:center; gap:12px; margin:12px 0 8px; }}
+    .score-bar {{ flex:1; height:8px; border-radius:4px; background:rgba(255,255,255,0.06); overflow:hidden; }}
+    .score-fill {{ height:100%; border-radius:4px; transition:width 0.5s ease; }}
+    .score-num {{ font-size:16px; font-weight:800; min-width:48px; text-align:right; }}
+    .status-pill {{ display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:3px 10px; border-radius:6px; text-transform:uppercase; }}
+    .pill-accepted {{ background:rgba(16,185,129,0.15); color:#34d399; }}
+    .pill-rejected {{ background:rgba(239,68,68,0.15); color:#f87171; }}
+    .pill-replica {{ background:rgba(245,158,11,0.15); color:#fbbf24; }}
+    .pill-scam {{ background:rgba(239,68,68,0.2); color:#f87171; }}
+    .reasons {{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }}
+    .reason-chip {{ font-size:11px; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.06); }}
+    </style></head><body>
+    {NAV_HTML}
+    <div class="page-header">
+        <h1>Bargain Radar - Ranked Listings</h1>
+        <div class="sort-controls">
+            <button class="sort-btn active" onclick="sortBy('score',this)">Score</button>
+            <button class="sort-btn" onclick="sortBy('price',this)">Price</button>
+            <button class="sort-btn" onclick="sortBy('distance',this)">Distance</button>
+        </div>
+    </div>
+    <div class="bargain-grid" id="grid"></div>
+    <script>
+    let listings = [];
+    const mpLabels = {{craigslist:"CL",fb_marketplace:"FB",offerup:"OU",mercari:"MC",ebay:"EB",reverb:"RV"}};
+    function scoreColor(s) {{
+        const pct = Math.max(0, Math.min(100, (s + 20) / 1.2));
+        if (pct > 60) return "var(--success)";
+        if (pct > 30) return "var(--warning)";
+        return "var(--danger)";
+    }}
+    function renderGrid(items) {{
+        const grid = document.getElementById("grid");
+        grid.innerHTML = items.map(item => {{
+            const l = item.listing;
+            const mp = l.marketplace || "unknown";
+            const cls = item.is_scam_suspected ? "scam" : item.is_replica_suspected ? "replica" : item.accepted ? "accepted" : "rejected";
+            const pct = Math.max(0, Math.min(100, (item.score + 20) / 1.2));
+            const dist = l.distance_mi != null ? l.distance_mi.toFixed(1) + " mi" : "ships";
+            const photos = l.photo_count != null ? l.photo_count + " photos" : "";
+            const age = l.posted_age_text || "";
+            let pills = "";
+            if (item.is_scam_suspected) pills += '<span class="status-pill pill-scam">SCAM</span>';
+            if (item.is_replica_suspected) pills += '<span class="status-pill pill-replica">REPLICA</span>';
+            if (item.accepted) pills += '<span class="status-pill pill-accepted">ACCEPTED</span>';
+            else if (!item.is_scam_suspected && !item.is_replica_suspected) pills += '<span class="status-pill pill-rejected">REJECTED</span>';
+            return '<div class="listing-card ' + cls + '">' +
+                '<div class="card-top"><div><div class="card-title">' + (l.title||"Untitled") + '</div>' +
+                '<div style="margin-top:6px;display:flex;gap:6px;align-items:center;">' +
+                '<span class="mp-badge mp-' + mp + '">' + (mpLabels[mp]||mp) + '</span>' + pills + '</div></div>' +
+                '<div class="card-price">$' + (l.price||0).toLocaleString() + '</div></div>' +
+                '<div class="card-meta"><span>' + dist + '</span><span>' + photos + '</span><span>' + age + '</span></div>' +
+                '<div class="score-row"><div class="score-bar"><div class="score-fill" style="width:' + pct + '%;background:' + scoreColor(item.score) + ';"></div></div>' +
+                '<div class="score-num" style="color:' + scoreColor(item.score) + ';">' + item.score.toFixed(1) + '</div></div>' +
+                '<div class="reasons">' + (item.reasons||[]).map(r => '<span class="reason-chip">' + r + '</span>').join("") + '</div></div>';
+        }}).join("");
+    }}
+    function sortBy(key, btn) {{
+        document.querySelectorAll(".sort-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const sorted = [...listings];
+        if (key === "score") sorted.sort((a,b) => b.score - a.score);
+        else if (key === "price") sorted.sort((a,b) => (a.listing.price||0) - (b.listing.price||0));
+        else if (key === "distance") sorted.sort((a,b) => (a.listing.distance_mi||999) - (b.listing.distance_mi||999));
+        renderGrid(sorted);
+    }}
+    async function load() {{
+        try {{
+            const res = await fetch("/api/bargains");
+            listings = await res.json();
+            renderGrid(listings);
+        }} catch(e) {{}}
+    }}
+    load();
+    setInterval(load, 10000);
+    </script></body></html>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 16: Split-Screen Comparison
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/split", response_class=HTMLResponse)
+async def split_page():
+    return f"""<!DOCTYPE html><html><head>
+    <title>AEGIS - Split Comparison</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    {SHARED_CSS}
+    body {{ display:flex; flex-direction:column; }}
+    .page-header {{ width:100%; padding:12px 40px; box-sizing:border-box; display:flex; justify-content:space-between; align-items:center; }}
+    .page-header h1 {{ font-size:22px; margin:0; font-weight:700; letter-spacing:-0.02em; background:linear-gradient(135deg,#fff 0%,#cbd5e1 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
+    .headline {{ display:flex; gap:24px; justify-content:center; align-items:center; padding:8px 40px 4px; }}
+    .hl-card {{ padding:12px 32px; border-radius:14px; text-align:center; }}
+    .hl-card.danger {{ background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); }}
+    .hl-card.success {{ background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); }}
+    .hl-label {{ font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; }}
+    .hl-card.danger .hl-label {{ color:#f87171; }}
+    .hl-card.success .hl-label {{ color:#34d399; }}
+    .hl-num {{ font-size:52px; font-weight:800; line-height:1; }}
+    .hl-card.danger .hl-num {{ color:#ef4444; }}
+    .hl-card.success .hl-num {{ color:#10b981; }}
+    .hl-vs {{ font-size:24px; font-weight:800; color:var(--text-muted); }}
+    .split-container {{ display:flex; gap:8px; flex:1; padding:8px 40px; box-sizing:border-box; min-height:0; }}
+    .split-panel {{ flex:1; display:flex; flex-direction:column; border-radius:16px; overflow:hidden; border:1px solid var(--panel-border); background:var(--panel-bg); }}
+    .panel-header {{ padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }}
+    .panel-header.raw {{ background:rgba(239,68,68,0.08); border-bottom:2px solid var(--danger); }}
+    .panel-header.aegis {{ background:rgba(16,185,129,0.08); border-bottom:2px solid var(--success); }}
+    .panel-title {{ font-size:15px; font-weight:700; }}
+    .panel-header.raw .panel-title {{ color:#f87171; }}
+    .panel-header.aegis .panel-title {{ color:#34d399; }}
+    .panel-status {{ display:flex; align-items:center; gap:12px; }}
+    .panel-status .step {{ font-size:14px; font-weight:700; color:var(--text-muted); }}
+    .panel-status .badge {{ font-size:11px; font-weight:700; padding:3px 10px; border-radius:6px; text-transform:uppercase; }}
+    .badge-idle {{ background:rgba(148,163,184,0.1); color:var(--text-muted); }}
+    .badge-running {{ background:rgba(59,130,246,0.1); color:#60a5fa; }}
+    .badge-success {{ background:rgba(16,185,129,0.1); color:#34d399; }}
+    .badge-failed {{ background:rgba(239,68,68,0.1); color:#f87171; }}
+    .panel-screen {{ flex:1; background:#000; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; min-height:0; }}
+    .panel-screen img {{ max-width:100%; max-height:100%; object-fit:contain; }}
+    .panel-result {{ padding:10px 16px; font-size:13px; max-height:60px; overflow-y:auto; background:rgba(15,23,42,0.6); border-top:1px solid var(--panel-border); color:var(--text-muted); display:none; }}
+    .controls {{ padding:10px 40px 16px; display:flex; gap:12px; align-items:center; }}
+    .controls input {{ flex:1; background:rgba(15,23,42,0.6); border:1px solid var(--panel-border); color:white; padding:10px 16px; border-radius:10px; font-size:14px; outline:none; font-family:'Inter',sans-serif; }}
+    .controls input:focus {{ border-color:var(--primary); box-shadow:0 0 0 3px rgba(59,130,246,0.15); }}
+    .controls button {{ background:linear-gradient(135deg,var(--primary) 0%,var(--accent) 100%); color:white; border:none; padding:10px 24px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; white-space:nowrap; box-shadow:0 4px 15px rgba(59,130,246,0.3); }}
+    .controls button:disabled {{ opacity:0.5; cursor:not-allowed; background:#334155; box-shadow:none; }}
+    </style></head><body>
+    {NAV_HTML}
+    <div class="page-header">
+        <h1>AEGIS Split Comparison</h1>
+    </div>
+    <div class="headline">
+        <div class="hl-card danger">
+            <div class="hl-label">Without AEGIS</div>
+            <div class="hl-num">16%</div>
+        </div>
+        <div class="hl-vs">vs</div>
+        <div class="hl-card success">
+            <div class="hl-label">With AEGIS</div>
+            <div class="hl-num">92%</div>
+        </div>
+    </div>
+    <div class="split-container">
+        <div class="split-panel">
+            <div class="panel-header raw">
+                <div class="panel-title">RAW CUA (No Safety)</div>
+                <div class="panel-status">
+                    <span class="step" id="step-raw">Step 0/40</span>
+                    <span class="badge badge-idle" id="badge-raw">IDLE</span>
+                </div>
+            </div>
+            <div class="panel-screen"><img id="img-raw" src="" alt=""/></div>
+            <div class="panel-result" id="result-raw"></div>
+        </div>
+        <div class="split-panel">
+            <div class="panel-header aegis">
+                <div class="panel-title">AEGIS-Wrapped CUA</div>
+                <div class="panel-status">
+                    <span class="step" id="step-aegis">Step 0/40</span>
+                    <span class="badge badge-idle" id="badge-aegis">IDLE</span>
+                </div>
+            </div>
+            <div class="panel-screen"><img id="img-aegis" src="" alt=""/></div>
+            <div class="panel-result" id="result-aegis"></div>
+        </div>
+    </div>
+    <div class="controls">
+        <input type="text" id="split-url" placeholder="Target URL (optional)"/>
+        <input type="text" id="split-task" placeholder="Search query, e.g. mid-century desk under $500 within 10 miles no replicas" style="flex:2;"/>
+        <button id="btn-split" onclick="startSplit()">Run Comparison</button>
+    </div>
+    <script>
+    const sseRaw = new EventSource("/split/stream/raw");
+    const sseAegis = new EventSource("/split/stream/aegis");
+    function updatePanel(side, data) {{
+        const img = document.getElementById("img-" + side);
+        const step = document.getElementById("step-" + side);
+        const badge = document.getElementById("badge-" + side);
+        const result = document.getElementById("result-" + side);
+        if (data.screenshot_url && data.screenshot_url !== img.src) img.src = data.screenshot_url;
+        if (data.step !== undefined) step.textContent = "Step " + data.step + "/40";
+        if (data.status) {{
+            badge.textContent = data.status.toUpperCase();
+            badge.className = "badge badge-" + data.status;
+        }}
+        if (data.result) {{
+            result.textContent = data.result;
+            result.style.display = "block";
+        }}
+    }}
+    sseRaw.onmessage = e => updatePanel("raw", JSON.parse(e.data));
+    sseAegis.onmessage = e => updatePanel("aegis", JSON.parse(e.data));
+    async function startSplit() {{
+        const url = document.getElementById("split-url").value.trim();
+        const task = document.getElementById("split-task").value.trim();
+        if (!task) return alert("Task is required.");
+        const btn = document.getElementById("btn-split");
+        btn.disabled = true;
+        btn.textContent = "Running...";
+        document.getElementById("result-raw").style.display = "none";
+        document.getElementById("result-aegis").style.display = "none";
+        const body = url ? {{url, task}} : {{task}};
+        try {{
+            await fetch("/split/start", {{method:"POST", headers:{{"Content-Type":"application/json"}}, body:JSON.stringify(body)}});
+        }} catch(e) {{ alert("Failed: " + e); }}
+        setTimeout(() => {{ btn.disabled = false; btn.textContent = "Run Comparison"; }}, 5000);
+    }}
+    </script></body></html>"""
+
+
 def main():
     uvicorn.run("cua_loop.ui_server:app", host="0.0.0.0", port=8555, reload=False)
 
