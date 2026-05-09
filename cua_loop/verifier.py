@@ -106,5 +106,5 @@ def verify(traj: Trajectory) -> VerifierResult:
             schema_valid=data.get("schema_valid", False),
             reason=str(data.get("reason", ""))[:80],
         )
-    except (json.JSONDecodeError, KeyError, TypeError):
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, Exception):
         return VerifierResult(success=False, reason=f"JSON parse error: {text[:80]}")
