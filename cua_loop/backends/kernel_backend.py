@@ -75,10 +75,11 @@ def _map_key(token: str) -> str:
         return "F" + lk[1:]
     return token.capitalize()
 
-# Playwright snippet: given (x, y) in the page viewport, return the centre of
-# the nearest interactive ancestor element if any, plus a debug label.
+# Playwright snippet wrapped in page.evaluate so document.* / window.* run in
+# the browser context, not the VM Node context. Returns the centre of the
+# nearest interactive element within `radius` pixels of (x, y), or {snapped:false}.
 _SNAP_JS = """
-(async ({x, y, radius}) => {
+const __snap = await page.evaluate(({x, y, radius}) => {
   const SEL = 'a, button, input, select, textarea, summary, label, ' +
     '[role="button"], [role="link"], [role="checkbox"], [role="menuitem"], ' +
     '[role="tab"], [role="option"], [role="switch"], [onclick], [tabindex]';
@@ -114,7 +115,24 @@ _SNAP_JS = """
              dist: bestDist };
   }
   return { snapped: false };
-})({x: __X__, y: __Y__, radius: __R__})
+}, { x: __X__, y: __Y__, radius: __R__ });
+return __snap;
+"""
+
+# DOM state snippet — same wrapping requirement.
+_DOM_STATE_JS = """
+const __dom = await page.evaluate(() => {
+  const a = document.activeElement;
+  return {
+    url: window.location.href,
+    title: document.title,
+    active_tag: a ? a.tagName : null,
+    active_text: a ? (a.innerText || a.value || '').slice(0, 50) : null,
+    scroll_y: window.scrollY,
+    html_hash: document.body ? document.body.innerHTML.length : 0
+  };
+});
+return __dom;
 """
 
 
@@ -184,43 +202,36 @@ class KernelBackend:
         return "data:image/png;base64," + base64.b64encode(b).decode()
 
     def get_dom_state(self) -> dict[str, Any]:
-        """Return a lightweight summary of the DOM state for verification."""
-        snippet = """
-        return {
-            url: window.location.href,
-            title: document.title,
-            active_tag: document.activeElement ? document.activeElement.tagName : null,
-            active_text: document.activeElement ? (document.activeElement.innerText || document.activeElement.value || '').slice(0, 50) : null,
-            scroll_y: window.scrollY,
-            html_hash: document.body ? document.body.innerHTML.length : 0 // Cheap proxy for change
-        };
-        """
+        """Lightweight DOM-state summary used by the action verifier."""
         try:
-            result = self._exec_pw("return " + snippet)
+            result = self._exec_pw(_DOM_STATE_JS)
             return self._extract_value(result) or {}
         except Exception:
             return {}
 
-    def _exec_pw(self, code: str) -> Any:
+    def _exec_pw(self, code: str, timeout_sec: int = 30) -> Any:
         """Run a Playwright snippet inside the Kernel browser VM.
 
-        Canonical method per Lightcone+Kernel docs:
-            kernel.browsers.playwright.execute(session_id, code=...)
-        Falls back to older `execute_playwright` for SDK version skew.
+        Canonical signature per docs:
+            kernel.browsers.playwright.execute(id=session_id, code=..., timeout_sec=...)
+        Returns a response with .result / .success / .error / .stderr.
         """
         pw = getattr(self._kernel.browsers, "playwright", None)
         if pw is not None:
             try:
-                return pw.execute(self._sid, code=code)
+                return pw.execute(id=self._sid, code=code, timeout_sec=timeout_sec)
             except TypeError:
-                # Some versions take code positionally
-                return pw.execute(self._sid, code)
+                # Older SDK without timeout_sec.
+                try:
+                    return pw.execute(id=self._sid, code=code)
+                except TypeError:
+                    return pw.execute(self._sid, code=code)
         legacy = getattr(self._kernel.browsers, "execute_playwright", None)
         if legacy is not None:
             try:
-                return legacy(self._sid, code=code)
-            except TypeError:
                 return legacy(id=self._sid, code=code)
+            except TypeError:
+                return legacy(self._sid, code=code)
         return None
 
     def _snap_coords(self, x: int, y: int) -> tuple[int, int]:
@@ -319,13 +330,16 @@ class KernelBackend:
 
     def drag(self, x1: int, y1: int, x2: int, y2: int) -> None:
         self._kernel.browsers.computer.drag_mouse(
-            id=self._sid, path=[[x1, y1], [x2, y2]]
+            self._sid, path=[[x1, y1], [x2, y2]]
         )
 
     def navigate(self, url: str) -> None:
-        # Computer-controls has no direct goto; use the Playwright bridge.
-        # We use a longer timeout and wait for load.
-        self._exec_pw(f"await page.goto({url!r}, {{waitUntil: 'load', timeout: 30000}}); return null;")
+        # No direct goto on computer-controls; use the Playwright bridge.
+        # 60s SDK-level timeout, 30s page-level timeout — page wins on tight loads.
+        self._exec_pw(
+            f"await page.goto({url!r}, {{ waitUntil: 'load', timeout: 30000 }}); return null;",
+            timeout_sec=60,
+        )
 
     def wait(self, seconds: float) -> None:
         time.sleep(seconds)
