@@ -216,7 +216,7 @@ async def index():
     </html>
     """
 def main():
-    uvicorn.run("cua_loop.ui_server:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("cua_loop.ui_server:app", host="0.0.0.0", port=8555, reload=False)
 
 if __name__ == "__main__":
     main()
