@@ -12,6 +12,7 @@ from rich.console import Console
 from cua_loop.client import run_single_attempt
 from cua_loop.fallback_scripts import run_fallback_extraction
 from cua_loop.types import AttemptResult, RunResult
+from cua_loop.validator import get_validator
 from cua_loop.verifier import verify
 
 console = Console()
@@ -20,16 +21,26 @@ MAX_ATTEMPTS = int(os.getenv("CUA_MAX_ATTEMPTS", "5"))
 TRAJ_DIR = Path(os.getenv("CUA_TRAJ_DIR", "trajectories"))
 
 
-def _critique_for_next(prev_traj_summaries: list[str]) -> str:
+def _critique_for_next(prev_traj_summaries: list[str], task: str = "") -> str:
     if not prev_traj_summaries:
         return ""
     bullets = "\n".join(f"- attempt {i + 1}: {s}" for i, s in enumerate(prev_traj_summaries))
-    return (
+    base = (
         "Prior attempts failed. Specifically:\n"
         f"{bullets}\n"
         "Try a different approach this time. Be more careful about waiting for "
         "page loads and verifying you are on the right element before clicking."
     )
+    if task:
+        validator = get_validator()
+        guidance = validator.guide_when_stuck(
+            task=task,
+            history=[{"summary": s} for s in prev_traj_summaries],
+            current_url=None,
+        )
+        if guidance.advice and guidance.confidence > 0.3:
+            base += f"\n\n[VALIDATOR GUIDANCE] {guidance.advice}"
+    return base
 
 
 def _summarize_failure(attempt: AttemptResult) -> str:
@@ -64,7 +75,7 @@ def run_with_retry(
             traj = run_single_attempt(
                 task=task,
                 url=url,
-                extra_context=_critique_for_next(failure_summaries),
+                extra_context=_critique_for_next(failure_summaries, task=task),
                 channel=channel,
             )
         except Exception as e:

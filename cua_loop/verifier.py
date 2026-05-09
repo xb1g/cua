@@ -1,25 +1,22 @@
-"""Local verifier using DOM extraction - no external API calls."""
+"""Verifier using DOM extraction + optional LLM validation."""
 
 from __future__ import annotations
 
 import os
 
 from cua_loop.types import Trajectory, VerifierResult
+from cua_loop.validator import get_validator
 
 VERIFY_MODE = os.getenv("VERIFY_MODE", "local")
 MIN_LISTINGS = int(os.getenv("VERIFIER_MIN_LISTINGS", "3"))
 
 
 def verify(traj: Trajectory) -> VerifierResult:
-    """Local verifier using DOM extraction results.
+    """Verifier using DOM extraction results, with optional LLM validation.
 
-    No external API calls. Uses extracted listings from trajectory.
+    Defaults to local heuristics. When VALIDATOR_PROVIDER=kimi, also
+    runs intelligent validation on extracted results.
     """
-    if VERIFY_MODE != "local":
-        return VerifierResult(
-            success=False,
-            reason=f"unsupported VERIFY_MODE={VERIFY_MODE}, only 'local' supported",
-        )
 
     extracted = traj.extracted
     if extracted is None:
@@ -67,6 +64,19 @@ def verify(traj: Trajectory) -> VerifierResult:
             reason = f"Only {rows_extracted} listings (min {MIN_LISTINGS})"
         else:
             reason = f"Only {valid_listings} valid (title+price)"
+
+    if success and traj.extracted:
+        validator = get_validator()
+        llm_verification = validator.verify_results(
+            task=traj.task,
+            extracted=traj.extracted,
+            screenshots=[s.screenshot_url for s in traj.steps if s.screenshot_url],
+        )
+        if not llm_verification.valid:
+            success = False
+            reason = f"{reason[:60]} | validator: {llm_verification.feedback[:60]}"
+        elif llm_verification.score > 0:
+            reason = f"{reason[:60]} | score={llm_verification.score:.2f}"
 
     return VerifierResult(
         success=success,
