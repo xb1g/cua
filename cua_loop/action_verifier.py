@@ -9,7 +9,7 @@ from typing import Any
 
 MUTATING_ACTIONS = {"click", "double_click", "type", "key", "keypress", "scroll", "hscroll", "drag", "navigate"}
 
-LOOP_WINDOW = 4
+LOOP_WINDOW = 6
 CONSECUTIVE_LIMIT = 5
 COORDINATE_RADIUS = 30
 MAX_SAME_TYPE_RATIO = 0.75
@@ -118,7 +118,7 @@ class LoopBreaker:
             if len(texts) >= 2 and len(set(texts)) == 1:
                 return ActionVerification(False, f"type loop: repeated '{texts[0][:40]}' {len(texts)} times")
 
-        if ratio == 1.0:
+        if ratio == 1.0 and most_common not in ("scroll", "hscroll"):
             return ActionVerification(
                 False,
                 f"action loop: {most_common} repeated {len(same_type)} times in last {self._window} steps",
