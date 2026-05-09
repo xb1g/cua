@@ -6,7 +6,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
+import pytest  # type: ignore[reportMissingImports]
 
 from cua_loop.orchestrator import (
     AgentTask,
@@ -113,6 +113,26 @@ class TestOrchestrate:
 
 
 class TestSwarmOrchestration:
+    @pytest.fixture(autouse=True)
+    def _isolate(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CUA_TRAJ_DIR", str(tmp_path / "trajectories"))
+        monkeypatch.setenv("CUA_MAX_STEPS", "3")
+        monkeypatch.setenv("AEGIS_EARLY_STOP", "5")
+
+    def _mock_run_single(self, extracted=None):
+        def _run(**kwargs):
+            from cua_loop.types import Trajectory
+            traj = Trajectory(task=kwargs.get("task", ""), url=kwargs.get("url"))
+            traj.extracted = extracted
+            traj.final_message = "Found listings"
+            return traj
+        return _run
+
+    def _mock_verify(self, success=True, rows=3):
+        return MagicMock(return_value=MagicMock(
+            success=success, rows_extracted=rows, schema_valid=True, reason="ok"
+        ))
+
     def test_understand_intent_parses_llm_response(self, monkeypatch):
         def fake_chat_json(system, user, *, temperature=0.2, max_tokens=1024):
             assert "Analyze the user's task" in system

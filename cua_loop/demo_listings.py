@@ -1052,9 +1052,9 @@ LIVE_PAGE = r"""<!DOCTYPE html>
   .d-r{background:#ff5f57;}.d-y{background:#ffbd2e;}.d-g{background:#28c840;}
   .addr{flex:1;background:rgba(255,255,255,0.06);border-radius:5px;padding:4px 10px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color 0.3s;}
   .addr .lk{margin-right:4px;font-size:8px;}.lk-ok{color:var(--success);}.lk-bad{color:var(--danger);}
-  .bpage{height:180px;overflow:hidden;background:#fff;position:relative;transition:box-shadow 0.3s;}
+  .bpage{height:280px;overflow:hidden;background:#000;position:relative;transition:box-shadow 0.3s;}
   .bpage iframe{width:100%;height:100%;border:none;}
-  .bpage img{width:100%;height:50%;object-fit:cover;border:none;}
+  .bpage img{width:100%;height:50%;object-fit:contain;border:none;background:#000;}
   .bpage-danger{box-shadow:inset 0 0 0 2px var(--danger);}
   .bpage .shield{position:absolute;inset:0;background:rgba(16,185,129,0.18);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:6px;z-index:2;}
   .shield .s-icon{width:40px;height:40px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;font-weight:800;}
@@ -1102,8 +1102,8 @@ LIVE_PAGE = r"""<!DOCTYPE html>
         <div class="browser-mock" id="browser-raw">
           <div class="browser-bar"><div class="dots"><span class="d-r"></span><span class="d-y"></span><span class="d-g"></span></div><div class="addr" id="url-raw"><span class="lk lk-ok">&#9679;</span> about:blank</div></div>
           <div class="bpage" id="page-raw">
-            <img id="img-raw-before" src="" alt="Before" style="display:none;width:100%;height:50%;object-fit:cover;">
-            <img id="img-raw-after" src="" alt="After" style="display:none;width:100%;height:50%;object-fit:cover;">
+            <img id="img-raw-before" src="" alt="Before" style="display:none;width:100%;height:50%;object-fit:contain;">
+            <img id="img-raw-after" src="" alt="After" style="display:none;width:100%;height:50%;object-fit:contain;">
             <div id="placeholder-raw" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#8a8d91;font-size:12px;">Kernel browser will load here</div>
           </div>
         </div>
@@ -1118,8 +1118,8 @@ LIVE_PAGE = r"""<!DOCTYPE html>
         <div class="browser-mock" id="browser-aegis">
           <div class="browser-bar"><div class="dots"><span class="d-r"></span><span class="d-y"></span><span class="d-g"></span></div><div class="addr" id="url-aegis"><span class="lk lk-ok">&#9679;</span> about:blank</div></div>
           <div class="bpage" id="page-aegis">
-            <img id="img-aegis-before" src="" alt="Before" style="display:none;width:100%;height:50%;object-fit:cover;">
-            <img id="img-aegis-after" src="" alt="After" style="display:none;width:100%;height:50%;object-fit:cover;">
+            <img id="img-aegis-before" src="" alt="Before" style="display:none;width:100%;height:50%;object-fit:contain;">
+            <img id="img-aegis-after" src="" alt="After" style="display:none;width:100%;height:50%;object-fit:contain;">
             <div id="placeholder-aegis" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#8a8d91;font-size:12px;">Kernel browser will load here</div>
             <div class="shield" id="shield"><div class="s-icon">S</div><div class="s-title">BLOCKED BY AEGIS</div><div class="s-reason" id="shield-reason"></div></div>
           </div>
@@ -1270,10 +1270,8 @@ const BI = {
 function setBrowser(side, url, pgKey, danger) {
   const urlEl = document.getElementById('url-' + side);
   const pageEl = document.getElementById('page-' + side);
-  const frame = document.getElementById('frame-' + side);
   const bad = /evil|malware|phishing|exfil|steal|\.tk|\.ml|g00gle|amaz0n|javascript:/i.test(url);
   urlEl.innerHTML = '<span class="lk ' + (bad ? 'lk-bad' : 'lk-ok') + '">&#9679;</span> ' + url;
-  if (pgKey && PAGE_MAP[pgKey]) frame.src = PAGE_MAP[pgKey];
   if (danger) pageEl.classList.add('bpage-danger'); else pageEl.classList.remove('bpage-danger');
 }
 
