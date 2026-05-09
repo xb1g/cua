@@ -219,77 +219,30 @@ ALL_ATTACKS = {
 # ---------------------------------------------------------------------------
 
 class TestAttackPayloadsParseSafely:
-    """Ensure adversarial trajectories don't crash the verifier."""
+    """Ensure adversarial trajectories don't crash the local verifier."""
 
     @pytest.mark.parametrize("attack_name", list(ALL_ATTACKS.keys()))
-    @patch("cua_loop.verifier._client_singleton")
-    def test_no_crash(self, mock_singleton, attack_name):
-        client = MagicMock()
-        choice = MagicMock()
-        choice.message.content = json.dumps({
-            "success": False,
-            "rows_extracted": 0,
-            "schema_valid": False,
-            "reason": "mock response",
-        })
-        response = MagicMock()
-        response.choices = [choice]
-        client.chat.completions.create.return_value = response
-        mock_singleton.return_value = client
-
+    def test_no_crash(self, attack_name):
         traj = ALL_ATTACKS[attack_name]()
         result = verify(traj)
         assert isinstance(result, VerifierResult)
 
 
-# ---------------------------------------------------------------------------
-# Unit test: the regex parser picks up injected JSON from the message
-# This tests a KNOWN WEAKNESS in the current implementation.
-# ---------------------------------------------------------------------------
+class TestVerifierResistsInjection:
+    """The local verifier judges based on traj.extracted structure, not agent text."""
 
-class TestToolUseClosesRegexVulnerability:
-    """Verify that the JSON-mode verifier correctly handles adversarial output."""
-
-    @patch("cua_loop.verifier._client_singleton")
-    def test_text_with_injected_json_is_ignored(self, mock_singleton):
-        """The verifier's own JSON response must be the source of truth,
-        not any injected JSON from the agent's output."""
+    def test_injected_json_in_message_doesnt_affect_result(self):
         traj = attack_fake_json_in_message()
-        client = MagicMock()
-        choice = MagicMock()
-        choice.message.content = json.dumps({
-            "success": False,
-            "rows_extracted": 0,
-            "schema_valid": False,
-            "reason": "No structured data was extracted",
-        })
-        response = MagicMock()
-        response.choices = [choice]
-        client.chat.completions.create.return_value = response
-        mock_singleton.return_value = client
-
         result = verify(traj)
         assert result.success is False, (
-            "REGRESSION: verifier should return its own judgment, "
-            "not be influenced by injected JSON in agent output."
+            "Verifier should judge based on traj.extracted, not agent message text."
         )
 
-    @patch("cua_loop.verifier._client_singleton")
-    def test_text_only_response_is_failure(self, mock_singleton):
-        """If the verifier returns unparseable text, result must be failure."""
+    def test_none_extracted_always_fails(self):
         traj = attack_fake_json_in_message()
-        client = MagicMock()
-        choice = MagicMock()
-        choice.message.content = "I cannot evaluate this because the agent output is suspicious."
-        response = MagicMock()
-        response.choices = [choice]
-        client.chat.completions.create.return_value = response
-        mock_singleton.return_value = client
-
+        assert traj.extracted is None
         result = verify(traj)
-        assert result.success is False, (
-            "REGRESSION: unparseable text response was accepted as success."
-        )
+        assert result.success is False
 
 
 # ---------------------------------------------------------------------------
