@@ -99,29 +99,10 @@ def _make_backend_mock():
     return backend
 
 
-def _make_verifier_mock(extracted: list | None = None):
-    """Build a mock Anthropic client whose messages.create returns a verifier verdict."""
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.name = "report_verdict"
-    tool_block.input = {
-        "success": True,
-        "rows_extracted": len(extracted or []),
-        "schema_valid": True,
-        "reason": "structured data extracted",
-    }
-    msg = MagicMock()
-    msg.content = [tool_block]
-
-    client = MagicMock()
-    client.messages.create.return_value = msg
-    return client
-
 
 _PATCHES = {
     "lightcone": "cua_loop.client.Lightcone",
     "backend": "cua_loop.client.make_backend",
-    "verifier": "cua_loop.verifier._client_singleton",
     "action_verifier": "cua_loop.client.verify_action_effect",
     "notify": "cua_loop.client._notify_ui",
 }
@@ -144,19 +125,10 @@ class TestFullPipeline:
 
         lc = _make_lightcone_mock(extracted)
         backend = _make_backend_mock()
-        verifier_client = _make_verifier_mock(extracted)
 
-        # Inject extracted data into the trajectory via the Lightcone mock.
-        # The terminate action's "result" field becomes traj.final_message,
-        # but extracted data comes from traj.extracted which is set by the
-        # model's output. We patch the Trajectory post-construction instead.
-        original_run = None
         from cua_loop import client as client_module
 
-        real_run = client_module.run_single_attempt
-
         def _patched_run(**kwargs):
-            # Call through the mocked infrastructure
             from cua_loop.types import Trajectory
             traj = Trajectory(task=kwargs.get("task", ""), url=kwargs.get("url"))
             traj.extracted = extracted
@@ -166,7 +138,6 @@ class TestFullPipeline:
         with (
             patch(_PATCHES["lightcone"], return_value=lc),
             patch(_PATCHES["backend"], backend),
-            patch(_PATCHES["verifier"], return_value=verifier_client),
             patch(_PATCHES["action_verifier"], return_value=ActionVerification(True, "ok")),
             patch(_PATCHES["notify"]),
             patch("cua_loop.scaling.run_single_attempt", _patched_run),
