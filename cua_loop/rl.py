@@ -1,0 +1,203 @@
+"""Kernel-backed reinforcement loop for AEGIS search strategies.
+
+This is a contextual bandit, not model-weight training. It learns which prompt
+strategy variants produce verified e-commerce trajectories for a given task.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import random
+import time
+from pathlib import Path
+from typing import Callable
+
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from rich.console import Console
+
+from cua_loop.client import run_single_attempt
+from cua_loop.types import AttemptResult, Trajectory, VerifierResult
+from cua_loop.verifier import verify
+
+console = Console()
+
+DEFAULT_POLICY_PATH = Path(os.getenv("AEGIS_RL_POLICY", "trajectories/aegis-rl-policy.json"))
+
+
+class SearchStrategy(BaseModel):
+    name: str
+    instruction: str
+
+
+class StrategyStats(BaseModel):
+    pulls: int = 0
+    reward_sum: float = 0.0
+    last_reward: float = 0.0
+
+    @property
+    def mean_reward(self) -> float:
+        return self.reward_sum / self.pulls if self.pulls else 0.0
+
+
+class RLPolicy(BaseModel):
+    stats: dict[str, StrategyStats] = Field(default_factory=dict)
+
+    def choose(self, strategies: list[SearchStrategy], epsilon: float = 0.15) -> SearchStrategy:
+        for strategy in strategies:
+            self.stats.setdefault(strategy.name, StrategyStats())
+
+        untried = [strategy for strategy in strategies if self.stats[strategy.name].pulls == 0]
+        if untried:
+            return untried[0]
+        if random.random() < epsilon:
+            return random.choice(strategies)
+
+        total_pulls = sum(self.stats[strategy.name].pulls for strategy in strategies)
+        return max(strategies, key=lambda strategy: self.ucb_score(strategy.name, total_pulls))
+
+    def ucb_score(self, strategy_name: str, total_pulls: int) -> float:
+        stats = self.stats[strategy_name]
+        if stats.pulls == 0:
+            return float("inf")
+        exploration = math.sqrt(2 * math.log(max(total_pulls, 1)) / stats.pulls)
+        return stats.mean_reward + exploration
+
+    def update(self, strategy_name: str, reward: float) -> None:
+        stats = self.stats.setdefault(strategy_name, StrategyStats())
+        stats.pulls += 1
+        stats.reward_sum += reward
+        stats.last_reward = reward
+
+
+DEFAULT_STRATEGIES = [
+    SearchStrategy(
+        name="direct_specs",
+        instruction="Search with exact product specs first. Prefer filters for price, RAM, storage, condition, and availability.",
+    ),
+    SearchStrategy(
+        name="broad_then_filter",
+        instruction="Start broad, collect candidates, then reject products that fail budget, stock, condition, or spec constraints.",
+    ),
+    SearchStrategy(
+        name="sort_low_price",
+        instruction="Sort by lowest total price, but verify shipping, stock, condition, and exact configuration before accepting.",
+    ),
+    SearchStrategy(
+        name="review_quality",
+        instruction="Prioritize well-reviewed products. Reject sponsored or low-confidence matches even if the price is attractive.",
+    ),
+]
+
+
+def load_policy(path: Path = DEFAULT_POLICY_PATH) -> RLPolicy:
+    if not path.exists():
+        return RLPolicy()
+    return RLPolicy.model_validate_json(path.read_text())
+
+
+def save_policy(policy: RLPolicy, path: Path = DEFAULT_POLICY_PATH) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(policy.model_dump_json(indent=2))
+
+
+def reward_from_attempt(attempt: AttemptResult) -> float:
+    verifier = attempt.verifier
+    reward = 0.0
+    if verifier.success:
+        reward += 1.0
+    if verifier.schema_valid:
+        reward += 0.25
+    reward += min(verifier.rows_extracted, 10) * 0.05
+    reward -= sum(1 for step in attempt.trajectory.steps if step.blocked) * 1.0
+    reward -= sum(1 for step in attempt.trajectory.steps if step.verification_passed is False) * 0.25
+    if attempt.trajectory.error:
+        reward -= 0.5
+    return round(reward, 3)
+
+
+def _run_strategy(task: str, url: str | None, strategy: SearchStrategy, index: int) -> AttemptResult:
+    started = time.time()
+    extra_context = (
+        f"AEGIS RL strategy: {strategy.name}.\n"
+        f"{strategy.instruction}\n"
+        "Use Kernel browser actions safely. Do not buy, checkout, message sellers, or submit payment data."
+    )
+    try:
+        traj = run_single_attempt(task=task, url=url, extra_context=extra_context, kind="kernel")
+    except Exception as exc:
+        traj = Trajectory(task=task, url=url, error=str(exc))
+
+    try:
+        verifier = verify(traj)
+    except Exception as exc:
+        verifier = VerifierResult(success=False, reason=f"verifier crashed: {exc}")
+
+    return AttemptResult(
+        attempt_index=index,
+        trajectory=traj,
+        verifier=verifier,
+        duration_s=time.time() - started,
+    )
+
+
+def train_policy(
+    task: str,
+    url: str | None,
+    episodes: int,
+    epsilon: float = 0.15,
+    policy_path: Path = DEFAULT_POLICY_PATH,
+    strategies: list[SearchStrategy] = DEFAULT_STRATEGIES,
+    runner: Callable[[str, str | None, SearchStrategy, int], AttemptResult] = _run_strategy,
+) -> RLPolicy:
+    policy = load_policy(policy_path)
+    episodes = max(1, episodes)
+
+    for episode in range(episodes):
+        strategy = policy.choose(strategies, epsilon=epsilon)
+        console.rule(f"[bold]RL episode {episode + 1}/{episodes}: {strategy.name}")
+        attempt = runner(task, url, strategy, episode)
+        reward = reward_from_attempt(attempt)
+        policy.update(strategy.name, reward)
+        console.print(
+            f"reward={reward} success={attempt.verifier.success} "
+            f"rows={attempt.verifier.rows_extracted} reason={attempt.verifier.reason!r}"
+        )
+        save_policy(policy, policy_path)
+
+    return policy
+
+
+def policy_summary(policy: RLPolicy) -> list[dict[str, float | int | str]]:
+    return [
+        {
+            "strategy": name,
+            "pulls": stats.pulls,
+            "mean_reward": round(stats.mean_reward, 3),
+            "last_reward": stats.last_reward,
+        }
+        for name, stats in sorted(policy.stats.items(), key=lambda item: item[1].mean_reward, reverse=True)
+    ]
+
+
+def main() -> int:
+    load_dotenv(override=True)
+    parser = argparse.ArgumentParser(description="Train AEGIS e-commerce search strategies with Kernel-backed bandit RL.")
+    parser.add_argument("--task", required=True)
+    parser.add_argument("--url", default=None)
+    parser.add_argument("--episodes", type=int, default=4)
+    parser.add_argument("--epsilon", type=float, default=0.15)
+    parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY_PATH)
+    args = parser.parse_args()
+
+    os.environ.setdefault("BROWSER_BACKEND", "kernel")
+    policy = train_policy(args.task, args.url, args.episodes, args.epsilon, args.policy)
+    console.print(json.dumps(policy_summary(policy), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

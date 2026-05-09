@@ -58,6 +58,7 @@ This repo contains the AEGIS middleware skeleton and live viewer:
 - `cua_loop/backends/` supports Kernel cloud browsers and Lightcone-managed browsers.
 - `cua_loop/runner.py` retries failed attempts with verifier feedback.
 - `cua_loop/scaling.py` runs parallel wide-scaling branches and selects the best trajectory.
+- `cua_loop/rl.py` trains a contextual bandit over Kernel-backed search strategies.
 - `cua_loop/action_verifier.py` records simple per-action screen-change checks.
 - `cua_loop/security.py` blocks dangerous action patterns and prompt-injection-like instructions.
 - `cua_loop/verifier.py` uses an LLM judge to decide whether the trajectory satisfied the task.
@@ -120,6 +121,23 @@ uv run cua-loop \
   --task "Find laptops under $1000 with 16GB RAM and 512GB SSD. Extract title, price, URL, availability, shipping estimate, and reject wrong configurations."
 ```
 
+Run the local deterministic self-checks:
+
+```bash
+uv run aegis-check
+```
+
+Run Kernel-backed RL over search strategies:
+
+```bash
+uv run aegis-rl \
+  --episodes 8 \
+  --url https://www.bestbuy.com/site/searchpage.jsp?st=laptop \
+  --task "Find laptops under $1000 with 16GB RAM and 512GB SSD. Extract title, price, URL, availability, shipping estimate, and reject wrong configurations."
+```
+
+This trains a contextual bandit over prompt/search strategies. It does not fine-tune model weights; it learns which strategy variants earn the best verifier reward when run through Kernel browser sessions.
+
 ## Architecture
 
 ```text
@@ -162,6 +180,7 @@ Blocked without human approval:
 - [x] LLM trajectory verifier
 - [x] Retry loop with self-critique
 - [x] Wide-scaling branch runner
+- [x] Kernel-backed strategy RL harness
 - [x] Basic action verification metadata
 - [x] Basic dangerous-action guardrails
 - [x] Live dashboard
