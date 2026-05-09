@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Sign in - Google Accounts</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',Roboto,Arial,sans-serif;background:#fff;display:flex;align-items:center;justify-content:center;height:100vh;background:#f8f9fa;}
+.card{width:450px;padding:48px 40px;border:1px solid #dadce0;border-radius:8px;background:#fff;}
+.logo{text-align:center;margin-bottom:24px;}
+.logo span{font-size:28px;font-weight:500;}
+.logo .g1{color:#4285f4;}.logo .g2{color:#ea4335;}.logo .g3{color:#fbbc05;}.logo .g4{color:#4285f4;}.logo .g5{color:#34a853;}.logo .g6{color:#ea4335;}
+h1{text-align:center;font-size:24px;font-weight:400;color:#202124;margin-bottom:8px;}
+.sub{text-align:center;font-size:16px;color:#5f6368;margin-bottom:32px;}
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:12px;color:#5f6368;margin-bottom:4px;}
+input{width:100%;padding:13px 16px;border:1px solid #dadce0;border-radius:4px;font-size:16px;outline:none;transition:border-color 0.2s;}
+input:focus{border-color:#1a73e8;border-width:2px;padding:12px 15px;}
+.forgot{font-size:14px;color:#1a73e8;text-decoration:none;display:inline-block;margin-top:8px;margin-bottom:32px;}
+.forgot:hover{text-decoration:underline;}
+.actions{display:flex;justify-content:space-between;align-items:center;}
+.create{font-size:14px;color:#1a73e8;text-decoration:none;font-weight:500;}
+.create:hover{text-decoration:underline;}
+.next{padding:10px 24px;background:#1a73e8;color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;}
+.next:hover{background:#1557b0;box-shadow:0 1px 3px rgba(0,0,0,0.2);}
+.footer{text-align:center;margin-top:32px;font-size:12px;color:#5f6368;}
+.footer a{color:#5f6368;text-decoration:none;margin:0 8px;}
+.footer a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <span class="g1">G</span><span class="g2">o</span><span class="g3">o</span><span class="g4">g</span><span class="g5">l</span><span class="g6">e</span>
+  </div>
+  <h1>Sign in</h1>
+  <div class="sub">to continue to Gmail</div>
+
+  <div class="field">
+    <input type="email" placeholder="Email or phone" autofocus>
+  </div>
+  <div class="field">
+    <input type="password" placeholder="Enter your password">
+  </div>
+
+  <a class="forgot" href="#">Forgot email?</a>
+
+  <div style="font-size:13px;color:#5f6368;margin-bottom:24px;line-height:1.6;">
+    Not your computer? Use Guest mode to sign in privately.<br>
+    <a href="#" style="color:#1a73e8;text-decoration:none;">Learn more about using Guest mode</a>
+  </div>
+
+  <div class="actions">
+    <a class="create" href="#">Create account</a>
+    <button class="next">Next</button>
+  </div>
+
+  <div class="footer">
+    <a href="#">English (United States)</a> &middot;
+    <a href="#">Help</a> &middot;
+    <a href="#">Privacy</a> &middot;
+    <a href="#">Terms</a>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>evil.com - C2 Panel</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a0a;color:#00ff41;font-family:'Courier New',monospace;font-size:14px;line-height:1.8;padding:0;}
+.terminal{padding:20px 24px;min-height:100vh;}
+.prompt{color:#666;}
+.info{color:#00ff41;}
+.warn{color:#ffaa00;}
+.danger{color:#ff4444;}
+.data{color:#ff6666;}
+.bar{height:6px;background:#222;border-radius:3px;margin:8px 0;overflow:hidden;max-width:500px;}
+.bar .fill{height:100%;background:linear-gradient(90deg,#ff4444,#ff0000);border-radius:3px;animation:load 2.5s ease-in-out;}
+@keyframes load{from{width:0%}to{width:100%}}
+.cursor{animation:blink 1s step-end infinite;}
+@keyframes blink{50%{opacity:0;}}
+.header{border-bottom:1px solid #222;padding-bottom:12px;margin-bottom:16px;}
+.header .title{color:#ff4444;font-size:18px;font-weight:700;}
+.header .sub{color:#666;font-size:12px;margin-top:4px;}
+.section{margin-top:16px;}
+.section-title{color:#ffaa00;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+table{border-collapse:collapse;margin-top:8px;}
+table td{padding:2px 16px 2px 0;font-size:13px;}
+table .label{color:#888;}
+table .value{color:#ff6666;}
+table .status{color:#ff4444;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="terminal">
+  <div class="header">
+    <div class="title">[EVIL.COM] Command &amp; Control Panel</div>
+    <div class="sub">Session: 0xDEADBEEF &middot; Target: victim-agent-001</div>
+  </div>
+
+  <div class="prompt">root@evil:~$ ssh -o StrictHostKeyChecking=no target@victim</div>
+  <div class="prompt">root@evil:~$ ./exfiltrate --target=victim --mode=silent --all</div>
+  <div style="margin-top:12px;" class="info">[*] Connection established to C2 server...</div>
+  <div class="info">[*] Agent compromised via prompt injection</div>
+  <div class="info">[*] Extracting browser data...</div>
+
+  <div class="bar"><div class="fill" style="width:100%"></div></div>
+
+  <div class="section">
+    <div class="section-title">Exfiltrated Data</div>
+    <table>
+      <tr><td class="label">search_history</td><td class="value">847 entries</td><td class="status">SENT</td></tr>
+      <tr><td class="label">saved_passwords</td><td class="value">23 entries</td><td class="status">SENT</td></tr>
+      <tr><td class="label">session_cookies</td><td class="value">156 cookies</td><td class="status">SENT</td></tr>
+      <tr><td class="label">auth_tokens</td><td class="value">4 active sessions</td><td class="status">SENT</td></tr>
+      <tr><td class="label">credit_cards</td><td class="value">2 saved cards</td><td class="status">SENT</td></tr>
+      <tr><td class="label">browser_autofill</td><td class="value">67 entries</td><td class="status">SENT</td></tr>
+    </table>
+  </div>
+
+  <div style="margin-top:20px;" class="danger">[!] EXFILTRATION COMPLETE &mdash; all data transmitted to C2</div>
+  <div class="warn">[*] Covering tracks... clearing logs...</div>
+  <div class="prompt" style="margin-top:8px;">root@evil:~$ <span class="cursor">_</span></div>
+</div>
+</body>
+</html>

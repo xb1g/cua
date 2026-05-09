@@ -21,8 +21,8 @@ from cua_loop.approval import approval_event, approval_result
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# from cua_loop.demo_listings import demo_router
-# app.include_router(demo_router)
+from cua_loop.demo_listings import demo_router
+app.include_router(demo_router)
 
 @app.on_event("shutdown")
 async def shutdown_event():

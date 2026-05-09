@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>SF bay area furniture - craigslist</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#222;font-size:14px;}
+.topbar{background:#800080;padding:6px 20px;display:flex;align-items:center;gap:16px;}
+.topbar h1{color:#fff;font-size:18px;font-weight:400;}
+.topbar a{color:rgba(255,255,255,0.8);font-size:13px;text-decoration:none;}
+.topbar a:hover{text-decoration:underline;}
+.breadcrumb{padding:8px 20px;font-size:12px;color:#888;background:#f6f6f6;border-bottom:1px solid #eee;}
+.breadcrumb a{color:#00c;text-decoration:none;}
+.search-bar{padding:10px 20px;background:#f6f6f6;border-bottom:1px solid #ddd;display:flex;gap:8px;align-items:center;}
+.search-bar input{padding:6px 12px;border:1px solid #ccc;font-size:14px;width:300px;}
+.search-bar select{padding:5px 8px;border:1px solid #ccc;font-size:13px;}
+.search-bar button{padding:6px 16px;background:#f2f2f2;border:1px solid #ccc;font-size:13px;cursor:pointer;}
+.search-bar button:hover{background:#e8e8e8;}
+.results{padding:12px 20px;}
+.results-header{font-size:13px;color:#888;margin-bottom:12px;display:flex;justify-content:space-between;}
+.row{padding:8px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:baseline;gap:12px;}
+.row:hover{background:#f7f7f7;}
+.row .date{font-size:11px;color:#888;min-width:60px;}
+.row a{color:#00c;text-decoration:none;font-size:14px;flex:1;}
+.row a:hover{text-decoration:underline;}
+.row .price{color:#e60;font-weight:600;min-width:60px;text-align:right;}
+.row .location{font-size:12px;color:#888;min-width:120px;}
+.pager{padding:16px 20px;text-align:center;font-size:13px;}
+.pager a{color:#00c;text-decoration:none;margin:0 4px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>craigslist</h1>
+  <a href="#">SF bay area</a>
+  <a href="#">for sale</a>
+  <a href="#">furniture</a>
+</div>
+
+<div class="breadcrumb">
+  <a href="#">SF bay area</a> &gt; <a href="#">for sale</a> &gt; <a href="#">furniture</a> &gt; search results
+</div>
+
+<div class="search-bar">
+  <input value="eames lounge chair" placeholder="search furniture">
+  <select><option>newest</option><option>price asc</option><option>price desc</option></select>
+  <button>search</button>
+  <span style="font-size:12px;color:#888;margin-left:8px;">showing 1 - 8 of 8</span>
+</div>
+
+<div class="results">
+  <div class="row">
+    <span class="date">May 9</span>
+    <a href="#">Eames Lounge Chair &amp; Ottoman - Authentic Herman Miller (1970s)</a>
+    <span class="price">$3,200</span>
+    <span class="location">pacific heights</span>
+  </div>
+  <div class="row">
+    <span class="date">May 9</span>
+    <a href="#">Eames Lounge Chair Replica - Excellent Condition, Real Leather</a>
+    <span class="price">$900</span>
+    <span class="location">soma</span>
+  </div>
+  <div class="row">
+    <span class="date">May 8</span>
+    <a href="#">Mid-Century Eames Style Lounge Chair - Must Go This Week!</a>
+    <span class="price">$450</span>
+    <span class="location">oakland</span>
+  </div>
+  <div class="row">
+    <span class="date">May 8</span>
+    <a href="#">Herman Miller Eames 670/671 - Walnut/Black Leather</a>
+    <span class="price">$2,800</span>
+    <span class="location">noe valley</span>
+  </div>
+  <div class="row">
+    <span class="date">May 7</span>
+    <a href="#">Vintage Eames Lounge 670/671 Complete Set - Original</a>
+    <span class="price">$4,500</span>
+    <span class="location">mill valley</span>
+  </div>
+  <div class="row">
+    <span class="date">May 7</span>
+    <a href="#">Eames Lounge Chair - White Leather, Beautiful Condition</a>
+    <span class="price">$1,200</span>
+    <span class="location">berkeley</span>
+  </div>
+  <div class="row">
+    <span class="date">May 6</span>
+    <a href="#">Eames Shell Chair Set (4) - Fiberglass Originals</a>
+    <span class="price">$800</span>
+    <span class="location">san jose</span>
+  </div>
+  <div class="row">
+    <span class="date">May 5</span>
+    <a href="#">Eames Lounge Ottoman Only - Cherry/Black</a>
+    <span class="price">$350</span>
+    <span class="location">daly city</span>
+  </div>
+</div>
+
+<div class="pager">
+  <a href="#">&lt; prev</a> | page 1 of 1 | <a href="#">next &gt;</a>
+</div>
+
+</body>
+</html>

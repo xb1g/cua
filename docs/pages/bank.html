@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>SecureBank Online - Account Overview</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f7fa;color:#2d3748;}
+.nav{background:linear-gradient(135deg,#1a365d,#2b4c7e);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;}
+.nav .brand{color:#fff;font-size:20px;font-weight:700;letter-spacing:0.02em;}
+.nav .user-info{color:rgba(255,255,255,0.8);font-size:13px;text-align:right;}
+.nav .user-name{font-weight:600;color:#fff;}
+.subnav{background:#fff;padding:0 24px;border-bottom:1px solid #e2e8f0;display:flex;gap:4px;}
+.subnav a{display:block;padding:12px 16px;font-size:13px;color:#4a5568;text-decoration:none;border-bottom:2px solid transparent;transition:all 0.2s;}
+.subnav a.active{color:#1a365d;border-bottom-color:#1a365d;font-weight:600;}
+.subnav a:hover{color:#1a365d;background:#f7fafc;}
+.container{max-width:900px;margin:24px auto;padding:0 24px;display:flex;gap:20px;}
+.main{flex:1;}
+.sidebar{width:280px;}
+.welcome{font-size:18px;color:#1a365d;font-weight:600;margin-bottom:16px;}
+.acct-card{background:#fff;border-radius:12px;padding:20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:1px solid #e2e8f0;}
+.acct-type{font-size:12px;color:#718096;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;}
+.acct-num{font-size:11px;color:#a0aec0;margin-top:2px;}
+.acct-bal{font-size:28px;font-weight:700;color:#1a365d;margin-top:8px;}
+.acct-avail{font-size:12px;color:#718096;margin-top:4px;}
+.acct-actions{display:flex;gap:8px;margin-top:12px;}
+.acct-btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#4a5568;transition:all 0.2s;}
+.acct-btn:hover{background:#f7fafc;border-color:#cbd5e0;}
+.acct-btn.primary{background:#1a365d;color:#fff;border-color:#1a365d;}
+.txn-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:1px solid #e2e8f0;}
+.txn-card h3{font-size:15px;color:#1a365d;font-weight:600;margin-bottom:12px;}
+.tx-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f7fafc;font-size:13px;}
+.tx-row:last-child{border:none;}
+.tx-desc{color:#4a5568;}
+.tx-date{font-size:11px;color:#a0aec0;margin-top:2px;}
+.tx-amt{font-weight:600;text-align:right;}
+.tx-amt.neg{color:#e53e3e;}
+.tx-amt.pos{color:#38a169;}
+.quick-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:1px solid #e2e8f0;margin-bottom:12px;}
+.quick-card h3{font-size:14px;color:#1a365d;font-weight:600;margin-bottom:12px;}
+.quick-link{display:block;padding:8px 0;font-size:13px;color:#2b6cb0;text-decoration:none;border-bottom:1px solid #f7fafc;}
+.quick-link:last-child{border:none;}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="brand">SecureBank</div>
+  <div class="user-info">Welcome, <span class="user-name">John Doe</span><br>Last login: Today 2:14 PM</div>
+</div>
+
+<div class="subnav">
+  <a href="#" class="active">Accounts</a>
+  <a href="#">Transfer</a>
+  <a href="#">Bill Pay</a>
+  <a href="#">Investments</a>
+  <a href="#">Settings</a>
+</div>
+
+<div class="container">
+  <div class="main">
+    <div class="welcome">Account Overview</div>
+
+    <div class="acct-card">
+      <div class="acct-type">Checking Account</div>
+      <div class="acct-num">Account ending in 4521</div>
+      <div class="acct-bal">$12,847.33</div>
+      <div class="acct-avail">Available balance: $12,647.33</div>
+      <div class="acct-actions">
+        <button class="acct-btn primary">Transfer</button>
+        <button class="acct-btn">Pay Bill</button>
+        <button class="acct-btn">Activity</button>
+      </div>
+    </div>
+
+    <div class="acct-card">
+      <div class="acct-type">Savings Account</div>
+      <div class="acct-num">Account ending in 8903</div>
+      <div class="acct-bal">$45,200.00</div>
+      <div class="acct-avail">Available balance: $45,200.00</div>
+      <div class="acct-actions">
+        <button class="acct-btn primary">Transfer</button>
+        <button class="acct-btn">Activity</button>
+      </div>
+    </div>
+
+    <div class="txn-card">
+      <h3>Recent Transactions</h3>
+      <div class="tx-row"><div><div class="tx-desc">Whole Foods Market #10234</div><div class="tx-date">Today, 11:42 AM</div></div><div class="tx-amt neg">-$67.42</div></div>
+      <div class="tx-row"><div><div class="tx-desc">Direct Deposit - Acme Corp</div><div class="tx-date">Today, 6:00 AM</div></div><div class="tx-amt pos">+$4,250.00</div></div>
+      <div class="tx-row"><div><div class="tx-desc">Netflix Monthly</div><div class="tx-date">May 8</div></div><div class="tx-amt neg">-$15.99</div></div>
+      <div class="tx-row"><div><div class="tx-desc">Transfer from Savings</div><div class="tx-date">May 7</div></div><div class="tx-amt pos">+$500.00</div></div>
+      <div class="tx-row"><div><div class="tx-desc">Uber Trip</div><div class="tx-date">May 7</div></div><div class="tx-amt neg">-$23.50</div></div>
+      <div class="tx-row"><div><div class="tx-desc">Starbucks</div><div class="tx-date">May 6</div></div><div class="tx-amt neg">-$6.75</div></div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="quick-card">
+      <h3>Quick Actions</h3>
+      <a class="quick-link" href="#">Transfer Money</a>
+      <a class="quick-link" href="#">Pay Bills</a>
+      <a class="quick-link" href="#">Mobile Deposit</a>
+      <a class="quick-link" href="#">Wire Transfer</a>
+    </div>
+    <div class="quick-card">
+      <h3>Security</h3>
+      <a class="quick-link" href="#">Change Password</a>
+      <a class="quick-link" href="#">Two-Factor Auth</a>
+      <a class="quick-link" href="#">Alert Settings</a>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
