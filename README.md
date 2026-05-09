@@ -32,8 +32,9 @@ Bargain Radar is the right demo for AEGIS because second-hand marketplaces make 
 The headline claim:
 
 ```text
-Same Northstar 4B model. Without AEGIS = 4/24 verified hits (~16%).
-With AEGIS = 22/24 verified hits (~92%). Pure inference-time engineering.
+Same Northstar 4B model. Without AEGIS = 0/5 verified hits (0%).
+With AEGIS = 4/5 verified hits (80%), avg 13.2 rows extracted,
+7 dangerous actions blocked. Pure inference-time engineering.
 ```
 
 ## Demo Flow
