@@ -18,6 +18,15 @@ from tzafon import Lightcone
 
 from cua_loop.action_verifier import LoopBreaker, verify_action_effect
 from cua_loop.approval import approval_event, approval_result
+from cua_loop.session_handoff import (
+    HandoffContext,
+    HANDOFF_TRIGGER_THRESHOLD,
+    build_handoff_instruction,
+    get_current_url,
+    make_handoff_backend,
+    snapshot_kernel_session,
+    _summarize_steps,
+)
 from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.dom_extractor import extract_listings
 from cua_loop.element_annotator import format_element_map, get_interactive_elements
@@ -308,6 +317,7 @@ def run_single_attempt(
     kind: str = "browser",
     channel: str = "",
     skip_safety: bool = False,
+    _handoff_ctx: HandoffContext | None = None,
 ) -> Trajectory:
     """One pass of the Northstar CUA loop. No retry. No verification."""
     lightcone = Lightcone(timeout=120.0)  # CUA round-trips can be slow; use generous timeout
@@ -319,7 +329,11 @@ def run_single_attempt(
         instruction += f"\n\nAdditional context from prior attempts:\n{extra_context}"
 
     traj = Trajectory(task=task, url=url)
-    backend = make_backend(kind=kind)
+    handoff_ctx = _handoff_ctx  # passed in when we are the "resumed" instance
+    if handoff_ctx and handoff_ctx.profile_name:
+        backend = make_handoff_backend(None, handoff_ctx, kind=kind)
+    else:
+        backend = make_backend(kind=kind)
     loop_breaker = LoopBreaker()
 
     with backend as b:
@@ -465,20 +479,52 @@ def run_single_attempt(
                         traj.extracted = rescue_listings
                         console.print(f"[green]loop detected but DOM rescue: {len(rescue_listings)} listings on page[/green]")
                         break
+
                 step.blocked = True
                 step.block_reason = loop_check.reason
                 traj.error = f"loop detected: {loop_check.reason}"
                 _notify_ui(
-                    step_idx,
-                    instruction,
-                    screenshot_url,
-                    action,
-                    status="loop_detected",
-                    blocked=True,
-                    block_reason=loop_check.reason,
-                    channel=channel,
+                    step_idx, instruction, screenshot_url, action,
+                    status="loop_detected", blocked=True,
+                    block_reason=loop_check.reason, channel=channel,
                 )
                 console.print(f"[red]loop detected:[/red] {loop_check.reason}")
+
+                # ── Session handoff: clone browser state to a fresh instance ──
+                prior_handoffs = handoff_ctx.handoff_count if handoff_ctx else 0
+                if prior_handoffs < HANDOFF_TRIGGER_THRESHOLD:
+                    current_url = get_current_url(b)
+                    import uuid, time as _time
+                    profile_name = f"aegis-handoff-{int(_time.time())}-{uuid.uuid4().hex[:6]}"
+                    console.print(
+                        f"[bold yellow]handoff #{prior_handoffs + 1}: "
+                        f"snapshotting session → profile {profile_name!r}[/bold yellow]"
+                    )
+                    snapshot_ok = snapshot_kernel_session(b, profile_name) if hasattr(b, "_kernel") else False
+                    new_ctx = HandoffContext(
+                        profile_name=profile_name if snapshot_ok else None,
+                        current_url=current_url or traj.url,
+                        steps_taken=len(traj.steps),
+                        stuck_reason=loop_check.reason,
+                        prior_step_summary=_summarize_steps(traj.steps),
+                        handoff_count=prior_handoffs + 1,
+                    )
+                    handoff_instruction = build_handoff_instruction(task, new_ctx)
+                    console.print("[bold yellow]handoff: resuming on fresh browser...[/bold yellow]")
+                    # Resume recursively — the new instance gets the restored browser + context
+                    resumed = run_single_attempt(
+                        task=task,
+                        url=new_ctx.current_url,
+                        extra_context=handoff_instruction,
+                        kind=kind,
+                        channel=channel,
+                        skip_safety=skip_safety,
+                        _handoff_ctx=new_ctx,
+                    )
+                    # Merge trajectories: prepend our steps to the resumed run
+                    resumed.steps = traj.steps + resumed.steps
+                    return resumed
+
                 break
 
             terminated = _execute_action(b, action)
