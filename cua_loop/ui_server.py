@@ -300,13 +300,19 @@ def run_split_raw_sync(url: str | None, task: str):
     from cua_loop.client import run_single_attempt
     try:
         traj = run_single_attempt(task=task, url=url, channel="raw", skip_safety=True)
-        httpx.post("http://localhost:8555/update?channel=raw",
-                   json={"status": "failed", "result": f"Raw CUA finished after {len(traj.steps)} steps. {traj.error or traj.final_message or 'No safety checks applied.'}"},
-                   timeout=5.0)
+        try:
+            httpx.post("http://localhost:8555/update?channel=raw",
+                       json={"status": "failed", "result": f"Raw CUA finished after {len(traj.steps)} steps. {traj.error or traj.final_message or 'No safety checks applied.'}"},
+                       timeout=10.0)
+        except Exception:
+            pass
     except Exception as e:
-        httpx.post("http://localhost:8555/update?channel=raw",
-                   json={"status": "failed", "result": f"{e}"},
-                   timeout=5.0)
+        try:
+            httpx.post("http://localhost:8555/update?channel=raw",
+                       json={"status": "failed", "result": f"{e}"},
+                       timeout=10.0)
+        except Exception:
+            pass
 
 def run_split_aegis_sync(url: str | None, task: str):
     import httpx
@@ -318,13 +324,19 @@ def run_split_aegis_sync(url: str | None, task: str):
         rows = last.verifier.rows_extracted if last else 0
         reason = last.verifier.reason if last else "no attempts ran"
         status = "success" if result.success else "failed"
-        httpx.post("http://localhost:8555/update?channel=aegis",
-                   json={"status": status, "result": f"AEGIS: {status} — {rows} rows in {result.total_duration_s:.1f}s. {reason}"},
-                   timeout=5.0)
+        try:
+            httpx.post("http://localhost:8555/update?channel=aegis",
+                       json={"status": status, "result": f"AEGIS: {status} — {rows} rows in {result.total_duration_s:.1f}s. {reason}"},
+                       timeout=10.0)
+        except Exception:
+            pass
     except Exception as e:
-        httpx.post("http://localhost:8555/update?channel=aegis",
-                   json={"status": "failed", "result": f"{e}"},
-                   timeout=5.0)
+        try:
+            httpx.post("http://localhost:8555/update?channel=aegis",
+                       json={"status": "failed", "result": f"{e}"},
+                       timeout=10.0)
+        except Exception:
+            pass
 
 @app.post("/split/start")
 async def start_split(req: StartRequest):
@@ -370,13 +382,19 @@ def run_agent_sync(url: str | None, task: str):
                     f"({result.total_duration_s:.1f}s). Last reason: {reason}"
                 ),
             }
-        httpx.post("http://localhost:8555/update", json=payload, timeout=5.0)
+        try:
+            httpx.post("http://localhost:8555/update", json=payload, timeout=10.0)
+        except Exception:
+            pass
     except Exception as e:
-        httpx.post(
-            "http://localhost:8555/update",
-            json={"status": "failed", "result": f"{e}\n{traceback.format_exc()}"},
-            timeout=5.0,
-        )
+        try:
+            httpx.post(
+                "http://localhost:8555/update",
+                json={"status": "failed", "result": f"{e}\n{traceback.format_exc()}"},
+                timeout=10.0,
+            )
+        except Exception:
+            pass
 
 @app.post("/start")
 async def start_agent(req: StartRequest):
