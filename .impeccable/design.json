@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-09T19:22:00Z",
+  "title": "Design System: AEGIS",
+  "extensions": {
+    "colorMeta": {
+      "canvas":         { "role": "neutral",   "displayName": "Deep Slate Canvas",  "canonical": "oklch(16% 0.02 250)", "tonalRamp": ["#040810","#0a1020","#0f172a","#1a2540","#243355","#3b4f70","#5a728f","#8094b0"] },
+      "surface":        { "role": "neutral",   "displayName": "Panel Surface",      "canonical": "oklch(22% 0.025 250)", "tonalRamp": ["#0a1020","#111827","#1e293b","#253348","#2d3f58","#3b5070","#567090","#7a96b8"] },
+      "surface-border": { "role": "neutral",   "displayName": "Hairline Border",    "canonical": "oklch(100% 0 0 / 8%)", "tonalRamp": ["#ffffff05","#ffffff08","#ffffff0d","#ffffff14","#ffffff1f","#ffffff2e","#ffffff40","#ffffff66"] },
+      "text-primary":   { "role": "neutral",   "displayName": "Off-White Text",     "canonical": "oklch(98% 0.005 250)", "tonalRamp": ["#334155","#475569","#64748b","#94a3b8","#cbd5e1","#e2e8f0","#f1f5f9","#f8fafc"] },
+      "text-muted":     { "role": "neutral",   "displayName": "Slate Muted",        "canonical": "oklch(65% 0.02 250)", "tonalRamp": ["#1e293b","#334155","#475569","#64748b","#94a3b8","#cbd5e1","#e2e8f0","#f8fafc"] },
+      "blue-primary":   { "role": "primary",   "displayName": "Blue Signal",        "canonical": "oklch(62% 0.19 250)", "tonalRamp": ["#1e3a8a","#1d4ed8","#2563eb","#3b82f6","#60a5fa","#93c5fd","#bfdbfe","#dbeafe"] },
+      "blue-deep":      { "role": "primary",   "displayName": "Blue Deep",          "canonical": "oklch(55% 0.19 250)", "tonalRamp": ["#1e3a8a","#1d4ed8","#2563eb","#3b82f6","#60a5fa","#93c5fd","#bfdbfe","#dbeafe"] },
+      "violet-accent":  { "role": "secondary", "displayName": "Violet Accent",      "canonical": "oklch(60% 0.21 290)", "tonalRamp": ["#4c1d95","#6d28d9","#7c3aed","#8b5cf6","#a78bfa","#c4b5fd","#ddd6fe","#ede9fe"] },
+      "state-success":  { "role": "tertiary",  "displayName": "Emerald Success",    "canonical": "oklch(68% 0.18 162)", "tonalRamp": ["#064e3b","#065f46","#047857","#059669","#10b981","#34d399","#6ee7b7","#a7f3d0"] },
+      "state-danger":   { "role": "tertiary",  "displayName": "Red Failure",        "canonical": "oklch(60% 0.22 25)",  "tonalRamp": ["#7f1d1d","#991b1b","#b91c1c","#dc2626","#ef4444","#f87171","#fca5a5","#fecaca"] },
+      "state-warning":  { "role": "tertiary",  "displayName": "Amber Warning",      "canonical": "oklch(74% 0.16 80)",  "tonalRamp": ["#78350f","#92400e","#b45309","#d97706","#f59e0b","#fbbf24","#fcd34d","#fde68a"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page title only. One instance per view." },
+      "title":   { "displayName": "Title",   "purpose": "Button labels and panel section headings." },
+      "body":    { "displayName": "Body",    "purpose": "Data values, result text, general prose. Max line length 65–75ch." },
+      "label":   { "displayName": "Label",   "purpose": "Field labels and panel section names. Always uppercase, always muted." },
+      "mono":    { "displayName": "Mono",    "purpose": "All machine data: JSON payloads, URLs, step counts, pre blocks." }
+    },
+    "shadows": [
+      { "name": "panel-ambient",   "value": "0 20px 40px -10px rgba(0,0,0,0.3)",        "purpose": "Ambient grounding under glass panels. Not structural elevation." },
+      { "name": "btn-primary",     "value": "0 4px 15px rgba(59,130,246,0.3)",           "purpose": "Default shadow under the primary action button." },
+      { "name": "btn-primary-hover","value": "0 8px 25px rgba(59,130,246,0.4)",          "purpose": "Lifted shadow on button hover." },
+      { "name": "cursor-glow",     "value": "0 0 20px rgba(59,130,246,0.6)",             "purpose": "Glow on the agent cursor overlay dot." },
+      { "name": "status-dot-running","value": "0 0 10px #60a5fa",                        "purpose": "Blue glow on the pulsing running status dot." },
+      { "name": "status-dot-success","value": "0 0 10px #34d399",                        "purpose": "Emerald glow on the success status dot." },
+      { "name": "status-dot-failed","value": "0 0 10px #f87171",                         "purpose": "Red glow on the failed status dot." },
+      { "name": "input-focus-ring","value": "0 0 0 3px rgba(59,130,246,0.15)",           "purpose": "Soft focus halo on focused input fields." }
+    ],
+    "motion": [
+      { "name": "ease-standard",    "value": "cubic-bezier(0.4, 0, 0.2, 1)",            "purpose": "Default easing for state transitions and layout changes." },
+      { "name": "ease-lift",        "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",       "purpose": "Cursor overlay position transitions. Slight overshoot is intentional — it tracks the agent cursor like a physical pointer." },
+      { "name": "screenshot-fade",  "value": "opacity 0.5s ease",                        "purpose": "Screenshot transition on new frame. Lingering previous frame avoids flash." },
+      { "name": "pulse-dot",        "value": "scale 0.95→1.2, 1.5s infinite ease-in-out","purpose": "Running status indicator. Only ambient animation in the system." },
+      { "name": "click-ripple",     "value": "scale 0.8→2, opacity 1→0, 0.6s cubic-bezier(0.1,0.8,0.3,1)", "purpose": "Cursor overlay ripple on click action." },
+      { "name": "btn-hover-lift",   "value": "translateY(-2px) 0.3s cubic-bezier(0.4,0,0.2,1)", "purpose": "Button lift on hover." },
+      { "name": "btn-spin",         "value": "rotate 1s linear infinite",                "purpose": "Loading spinner inside button while agent is starting." }
+    ],
+    "breakpoints": [
+      { "name": "default", "value": "1600px max-width", "note": "Dashboard is designed for 1440–1920px monitor widths. No mobile breakpoints; this is an operator tool." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "btn-primary",
+      "description": "The sole primary CTA. Launches the agent run. Full-width in its container.",
+      "html": "<button class=\"ds-btn-primary\"><span>Start Agent</span></button>",
+      "css": ".ds-btn-primary { background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: #f8fafc; border: none; padding: 14px 24px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; font-family: 'Inter', system-ui, sans-serif; box-shadow: 0 4px 15px rgba(59,130,246,0.3); transition: all 0.3s cubic-bezier(0.4,0,0.2,1); } .ds-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59,130,246,0.4); } .ds-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; background: #334155; box-shadow: none; } .ds-btn-primary:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Badge — Running",
+      "kind": "chip",
+      "refersTo": "status-badge-running",
+      "description": "Pill badge indicating live agent activity. Pulse dot is the only ambient animation.",
+      "html": "<div class=\"ds-status-badge ds-status-running\"><div class=\"ds-status-dot\"></div><span>RUNNING</span></div>",
+      "css": ".ds-status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Inter', system-ui, sans-serif; } .ds-status-running { background: rgba(59,130,246,0.1); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); } .ds-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; box-shadow: 0 0 10px #60a5fa; animation: ds-pulse 1.5s ease-in-out infinite; } @keyframes ds-pulse { 0% { transform: scale(0.95); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.5; } }"
+    },
+    {
+      "name": "Status Badge — Success",
+      "kind": "chip",
+      "refersTo": "status-badge-success",
+      "description": "Pill badge for verified successful agent run.",
+      "html": "<div class=\"ds-status-badge ds-status-success\"><div class=\"ds-status-dot-success\"></div><span>SUCCESS</span></div>",
+      "css": ".ds-status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Inter', system-ui, sans-serif; } .ds-status-success { background: rgba(16,185,129,0.1); color: #34d399; border: 1px solid rgba(16,185,129,0.2); } .ds-status-dot-success { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399; }"
+    },
+    {
+      "name": "Glass Panel",
+      "kind": "card",
+      "refersTo": "glass-panel",
+      "description": "Primary structural container. All data groups live in one. Never nest.",
+      "html": "<div class=\"ds-glass-panel\"><div class=\"ds-data-label\">SECTION LABEL</div><div class=\"ds-data-value\">Data value here</div></div>",
+      "css": ".ds-glass-panel { background: rgba(30,41,59,0.7); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3); } .ds-data-label { font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; font-family: 'Inter', system-ui, sans-serif; } .ds-data-value { font-size: 14px; color: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Text input for agent task prompt and target URL.",
+      "html": "<div class=\"ds-input-group\"><label class=\"ds-field-label\">TARGET URL</label><input class=\"ds-input\" type=\"text\" placeholder=\"https://…\" /></div>",
+      "css": ".ds-input-group { display: flex; flex-direction: column; gap: 8px; } .ds-field-label { font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Inter', system-ui, sans-serif; } .ds-input { background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.08); color: #f8fafc; padding: 12px 16px; border-radius: 10px; font-size: 14px; font-family: 'Inter', system-ui, sans-serif; outline: none; transition: border-color 0.2s, box-shadow 0.2s; } .ds-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); } .ds-input::placeholder { color: #475569; }"
+    },
+    {
+      "name": "Action Payload Pre",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Monospace preformatted block for JSON action payloads. Most frequently updated surface during a run.",
+      "html": "<pre class=\"ds-action-pre\">{\"type\": \"click\", \"x\": 640, \"y\": 360}</pre>",
+      "css": ".ds-action-pre { margin: 0; white-space: pre-wrap; font-size: 13px; color: #a5b4fc; background: rgba(15,23,42,0.8); padding: 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); font-family: 'JetBrains Mono', 'Fira Code', monospace; max-height: 200px; overflow-y: auto; line-height: 1.6; }"
+    },
+    {
+      "name": "Result Box — Success",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Inline result summary displayed after a completed agent run. Not a modal.",
+      "html": "<div class=\"ds-result ds-result-success\">Success on attempt 2/5 — extracted 10 rows in 34.2s. Reason: schema valid, row count matches.</div>",
+      "css": ".ds-result { padding: 15px; border-radius: 10px; font-size: 13px; line-height: 1.5; font-family: 'Inter', system-ui, sans-serif; margin-top: 15px; } .ds-result-success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: #a7f3d0; } .ds-result-failed { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fecaca; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Operator's War Room",
+    "overview": "AEGIS's dashboard is not a product to be admired — it is a surface to be read. The design language borrows from GitHub's dark-native aesthetic: structured information at high density, functional hierarchy enforced by type weight and color restraint, no decorative noise. The canvas is deep slate, not black. Panels float on it as darker-tinted surfaces with hairline borders. The only saturated colors that appear are status signals — blue for running, emerald for success, red for failure — and they carry meaning every time they fire.\n\nThis system explicitly rejects: the rainbow color soup of Grafana-style dashboards, consumer-warm rounded-corner friendliness, glassmorphism used as decoration, hackathon-demo clichés (hero gradients, glowing neon accents, large animated counters for vanity). The agent on screen is doing hard technical work; the interface should look like it agrees.\n\nThe visual register is GitHub's internal dark tooling crossed with a terminal-adjacent operator console. Information is dense because the operator needs it dense.",
+    "keyCharacteristics": [
+      "Deep slate canvas, no true black or white",
+      "Status signals are the only saturated color moments",
+      "Labels uppercase + tracked at 12px; values at 14px regular — always this pairing",
+      "Monospace for all machine data: action payloads, JSON, step counts, URLs",
+      "Panels at rest are subtle glass surfaces; interactions lift them slightly",
+      "Motion is purposeful: cursor overlay, screenshot fade, pulse dot — all carry state"
+    ],
+    "rules": [
+      { "name": "The State-Color Purity Rule",    "body": "Blue, violet, emerald, red, and amber appear only as semantic signals — running, action, success, failure, warning. Never decorative. If you reach for one of these colors to make something look nicer, rewrite the element.", "section": "colors" },
+      { "name": "The Two-Register Rule",           "body": "Every text element is either Prose (Inter) or Machine (JetBrains Mono). There is no third register. A URL in a label uses mono. A button label uses Inter. Never mix them on the same line.", "section": "typography" },
+      { "name": "The Label Protocol",              "body": "Every data field uses the same two-line pattern: LABEL at 12px uppercase muted, then value at 14px primary below it. This pairing is the atomic unit of the dashboard's information display.", "section": "typography" },
+      { "name": "The Flat-by-Default Rule",        "body": "Shadows appear only on panels (ambient grounding) and on interactive elements at hover. No shadows on text, no inner shadows on inputs, no layered shadow stacks.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use the Label Protocol for every data field: 12px uppercase muted label above, 14px primary value below.",
+      "Do use JetBrains Mono for all machine data: JSON payloads, URLs, step counts, structured output.",
+      "Do keep state colors (blue, violet, emerald, red, amber) as semantic-only signals.",
+      "Do use ease-out curves for transitions. State changes should feel resolved, not bouncy.",
+      "Do tint every neutral toward the slate hue. No pure #000 or #fff.",
+      "Do make failure states legible and prominent. Red badges and result boxes should be as readable as success states.",
+      "Do vary spacing for rhythm: 8px micro, 12px control-padding, 20px section breaks, 24px panel gaps, 40px page padding."
+    ],
+    "donts": [
+      "Don't use rainbow color palettes or multi-hue overload (Grafana, Datadog). Two neutrals and five semantic colors is the entire palette.",
+      "Don't use glassmorphism decoratively. The panel blur is structural; blur on tooltips, dropdowns, or nested cards is decoration. Prohibited.",
+      "Don't use border-left greater than 1px as a colored accent stripe on any element.",
+      "Don't use background-clip: text gradient text. Decorative, never meaningful. Replace with a solid off-white.",
+      "Don't nest panels. A glass card inside a glass panel is always wrong.",
+      "Don't add modal dialogs as a first solution. Use inline confirmation strips instead.",
+      "Don't add animations for decoration. Every animation must communicate state.",
+      "Don't use consumer-warm aesthetic choices: bubbly radii, soft pastels, playful illustration.",
+      "Don't use the hero-metric template (big number, small label, gradient accent)."
+    ]
+  }
+}
