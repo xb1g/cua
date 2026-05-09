@@ -14,7 +14,7 @@ import httpx
 from rich.console import Console
 from tzafon import Lightcone
 
-from cua_loop.action_verifier import verify_action_effect
+from cua_loop.action_verifier import LoopBreaker, verify_action_effect
 from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
@@ -169,6 +169,7 @@ def run_single_attempt(
 
     traj = Trajectory(task=task, url=url)
     backend = make_backend(kind=kind)
+    loop_breaker = LoopBreaker()
 
     with backend as b:
         screenshot_url = b.screenshot_url()
@@ -235,6 +236,24 @@ def run_single_attempt(
                     agent_id=agent_id,
                 )
                 console.print(f"[red]blocked unsafe action:[/red] {policy.reason}")
+                break
+
+            loop_breaker.record(action)
+            loop_check = loop_breaker.check()
+            if not loop_check.passed:
+                step.blocked = True
+                step.block_reason = loop_check.reason
+                traj.error = f"loop detected: {loop_check.reason}"
+                _notify_ui(
+                    step_idx,
+                    instruction,
+                    screenshot_url,
+                    action,
+                    status="loop_detected",
+                    blocked=True,
+                    block_reason=loop_check.reason,
+                )
+                console.print(f"[red]loop detected:[/red] {loop_check.reason}")
                 break
 
             terminated = _execute_action(b, action)

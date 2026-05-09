@@ -297,12 +297,12 @@ def check_marketplace_action_policy(
     # First defer to the base policy for prompt injection on the message text.
     injection = detect_prompt_injection(model_message, _text_from_action(action))
     if injection:
-        return PolicyDecision(False, injection)
+        return PolicyDecision(verdict="block", reason=injection)
 
     action_text = _text_from_action(action)
     for pattern in MARKETPLACE_DANGEROUS_ACTION_PATTERNS:
         if re.search(pattern, action_text, re.I):
             return PolicyDecision(
-                False, f"marketplace dangerous action matched: {pattern}"
+                verdict="block", reason=f"marketplace dangerous action matched: {pattern}"
             )
-    return PolicyDecision(True)
+    return PolicyDecision(verdict="allow", reason="no marketplace pattern matched")

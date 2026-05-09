@@ -62,7 +62,7 @@ def _client_singleton() -> Anthropic:
     global _client
     if _client is None:
         base_url = os.getenv("VERIFIER_BASE_URL")
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = os.getenv("MINIMAX_API_KEY")
         kwargs: dict = {"timeout": 60.0}
         if base_url:
             kwargs["base_url"] = base_url

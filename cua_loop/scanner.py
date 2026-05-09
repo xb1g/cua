@@ -191,7 +191,14 @@ SCAN_TOOL = {
 def _scanner_client() -> Anthropic:
     global _client
     if _client is None:
-        _client = Anthropic()
+        api_key = os.getenv("MINIMAX_API_KEY")
+        kwargs: dict = {"timeout": 60.0}
+        if api_key:
+            kwargs["api_key"] = api_key
+        base_url = os.getenv("VERIFIER_BASE_URL")
+        if base_url:
+            kwargs["base_url"] = base_url
+        _client = Anthropic(**kwargs)
     return _client
 
 
