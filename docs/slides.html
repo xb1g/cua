@@ -11,24 +11,19 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#f8fafc;o
 .slide{position:absolute;top:0;left:0;width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:80px 120px;opacity:0;transform:translateX(60px);transition:opacity 0.5s ease,transform 0.5s ease;pointer-events:none;text-align:center}
 .slide.active{opacity:1;transform:translateX(0);pointer-events:auto}
 .slide.prev{opacity:0;transform:translateX(-60px)}
-h1{font-size:72px;font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin-bottom:24px;background:linear-gradient(135deg,#fff 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h1{font-size:80px;font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin-bottom:24px;background:linear-gradient(135deg,#fff 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 h2{font-size:48px;font-weight:800;letter-spacing:-0.02em;line-height:1.2;margin-bottom:32px;color:#f8fafc}
-.subtitle{font-size:28px;color:#94a3b8;margin-bottom:16px;font-weight:500}
-.tagline{font-size:22px;color:#64748b;font-style:italic;margin-bottom:24px}
-.repo{font-size:20px;color:#3b82f6;font-family:'JetBrains Mono',monospace;letter-spacing:0.02em}
+.hook{font-size:28px;color:#94a3b8;margin-bottom:20px;font-weight:500;max-width:900px;line-height:1.5}
+.hook strong{color:#10b981}
+.repo{font-size:22px;color:#3b82f6;font-family:'JetBrains Mono',monospace;letter-spacing:0.02em;margin-top:16px}
 ul{text-align:left;font-size:28px;line-height:2;color:#e2e8f0;max-width:900px}
-ul li{margin-bottom:8px}
 ul li strong{color:#f8fafc}
 .fail-bar{display:inline-block;background:rgba(239,68,68,0.15);border:2px solid #ef4444;border-radius:12px;padding:12px 32px;font-size:28px;font-weight:800;color:#f87171;margin-top:24px}
-table.layers{border-collapse:separate;border-spacing:16px;margin:0 auto}
-table.layers th{font-size:19px;font-weight:800;color:#f8fafc;padding:14px 18px;border-bottom:3px solid #3b82f6;text-align:center;min-width:200px}
-table.layers td{font-size:17px;color:#cbd5e1;padding:10px 18px;text-align:center;background:rgba(30,41,59,0.6);border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
-.demo-title{font-size:64px;font-weight:900;letter-spacing:-0.02em;color:#f8fafc;margin-bottom:32px}
-.demo-query{font-size:26px;color:#94a3b8;font-style:italic;margin-bottom:40px}
-table.results-tbl{border-collapse:separate;border-spacing:8px;font-size:22px;margin:0 auto}
-table.results-tbl th{padding:10px 20px;color:#94a3b8;font-weight:600;text-align:left}
-table.results-tbl td{padding:10px 20px;background:rgba(30,41,59,0.5);border-radius:8px;border:1px solid rgba(255,255,255,0.06)}
-.blocked-badge{display:inline-block;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 20px;font-size:20px;color:#fca5a5;margin-top:24px}
+table.layers{border-collapse:separate;border-spacing:12px;margin:0 auto}
+table.layers th{font-size:18px;font-weight:800;color:#f8fafc;padding:12px 16px;border-bottom:3px solid #3b82f6;text-align:center;min-width:190px}
+table.layers td{font-size:16px;color:#cbd5e1;padding:9px 16px;text-align:center;background:rgba(30,41,59,0.6);border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
+.demo-title{font-size:96px;font-weight:900;letter-spacing:-0.03em;color:#f8fafc}
+.demo-sub{font-size:28px;color:#475569;margin-top:24px;font-weight:500}
 .headline-row{display:flex;gap:80px;justify-content:center;align-items:center;margin-bottom:40px}
 .headline-card{padding:40px 64px;border-radius:24px;text-align:center}
 .headline-card.bad{background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.3)}
@@ -41,22 +36,14 @@ table.results-tbl td{padding:10px 20px;background:rgba(30,41,59,0.5);border-radi
 .headline-card.good .headline-num{color:#10b981}
 .headline-sub{font-size:20px;color:#94a3b8;margin-top:8px;font-weight:500}
 .headline-vs{font-size:48px;font-weight:900;color:#334155}
-.stats-row{display:flex;gap:40px;justify-content:center;margin-bottom:24px}
+.stats-row{display:flex;gap:48px;justify-content:center;margin-bottom:20px}
 .stat-box{text-align:center}
 .stat-num{font-size:36px;font-weight:800;color:#f8fafc}
 .stat-label{font-size:16px;color:#64748b;margin-top:4px}
-.model-note{font-size:22px;color:#64748b;margin-top:8px}
-.footnote{font-size:18px;color:#475569;margin-top:16px}
-table.cost{border-collapse:separate;border-spacing:8px;font-size:24px;margin:0 auto}
-table.cost td,table.cost th{padding:14px 28px;text-align:left}
-table.cost th{color:#94a3b8;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.1)}
-table.cost td{background:rgba(30,41,59,0.5);border-radius:8px;border:1px solid rgba(255,255,255,0.06);color:#e2e8f0}
-table.cost tr.total td{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:#34d399;font-weight:800}
-table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#f87171}
-.cta-repo{font-size:36px;font-weight:800;color:#3b82f6;margin:24px 0;font-family:'JetBrains Mono',monospace}
-.module-list{text-align:left;font-size:22px;color:#94a3b8;line-height:2;max-width:700px;margin:0 auto}
-.module-list code{color:#a78bfa;background:rgba(139,92,246,0.1);padding:2px 8px;border-radius:4px;font-size:20px}
-.compat{font-size:22px;color:#64748b;margin-top:32px}
+.model-note{font-size:24px;color:#94a3b8;margin-top:8px;font-weight:600}
+.cta{margin-top:24px}
+.cta-repo{font-size:28px;font-weight:800;color:#3b82f6;font-family:'JetBrains Mono',monospace}
+.cta-license{font-size:18px;color:#475569;margin-top:8px}
 .progress{position:fixed;bottom:0;left:0;height:4px;background:linear-gradient(90deg,#3b82f6,#8b5cf6);transition:width 0.4s ease;z-index:100}
 .slide-counter{position:fixed;bottom:16px;right:24px;font-size:14px;color:#475569;font-weight:600;z-index:100}
 .notes{display:none;position:fixed;bottom:40px;left:24px;right:24px;background:rgba(30,41,59,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px 24px;font-size:16px;color:#94a3b8;line-height:1.6;z-index:200;backdrop-filter:blur(12px)}
@@ -66,16 +53,15 @@ table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,6
 </head>
 <body>
 
-<!-- Slide 1: Title -->
-<div class="slide active" data-notes="We built AEGIS — four layers of inference-time engineering that take any CUA model from 0% to 100% success without retraining. Our demo app is Bargain Radar.">
+<!-- Slide 1: Title (10s) -->
+<div class="slide active" data-notes="AEGIS is open-source reliability and safety middleware for computer-use agents. We take Northstar 4B from 0% to 100% success through pure inference-time engineering. Demo app is Bargain Radar — multi-marketplace second-hand deal finder.">
   <h1>AEGIS</h1>
-  <div class="subtitle">Reliability + Safety Middleware for Computer-Use Agents</div>
-  <div class="tagline">Bargain Radar: multi-marketplace second-hand deal finder</div>
+  <div class="hook"><strong>0% &rarr; 100%</strong> success rate through inference-time engineering.<br>No retraining. No new weights. Same model.</div>
   <div class="repo">github.com/xb1g/cua</div>
 </div>
 
-<!-- Slide 2: Problem -->
-<div class="slide" data-notes="We tested Northstar 4B on 5 marketplace searches. Without any wrapper, it succeeded zero times. The failures aren't random — they compound. One wrong click leads to another. No verification means it doesn't know it went wrong. No safety means it messages strangers and clicks phishing links.">
+<!-- Slide 2: Problem (15s) -->
+<div class="slide" data-notes="We tested Northstar 4B on real marketplace searches. Without any wrapper, zero out of five succeeded. The failures compound — one wrong click cascades. The model doesn't know it went wrong. And there's nothing stopping it from messaging strangers or clicking phishing links.">
   <h2>Every CUA model fails the same way</h2>
   <ul>
     <li><strong>Error compounding</strong> — one wrong click cascades into total failure</li>
@@ -85,9 +71,9 @@ table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,6
   <div class="fail-bar">0% success rate without AEGIS (0/5 tasks)</div>
 </div>
 
-<!-- Slide 3: Four Layers -->
-<div class="slide" data-notes="AEGIS has four layers. Layer 1 is the orchestrator — the central brain that coordinates the swarm, assigns different search strategies to each branch, monitors progress in real-time, and cascades from CUA to DOM extraction to fallback scripts per branch. Layer 2 is wide scaling — parallel KERNEL browsers across marketplaces and strategies. Layer 3 is action verification — after every single action, we verify the screen changed, detect if the agent is stuck, and extract DOM data mid-loop. Layer 4 is security — we block dangerous actions, scan for prompt injection, detect scams and replicas, and require human approval for contact actions.">
-  <h2>AEGIS: four inference-time layers</h2>
+<!-- Slide 3: Solution (15s) -->
+<div class="slide" data-notes="AEGIS wraps the CUA loop with four inference-time layers. The orchestrator coordinates a swarm of parallel browsers, each with a different strategy. Wide scaling runs them across 6 marketplaces simultaneously. Action verification catches failures at step 3 instead of step 40. And security guardrails mean the agent literally cannot message anyone or click a phishing link without human approval.">
+  <h2>Four inference-time layers</h2>
   <table class="layers">
     <tr>
       <th>Orchestrator</th>
@@ -122,22 +108,15 @@ table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,6
   </table>
 </div>
 
-<!-- Slide 4: Live Demo -->
-<div class="slide" data-notes="The system succeeded on attempt 5 of 5 — that's the AEGIS retry mechanism in action. Without AEGIS, attempt 1 fails and there are no retries. The verifier caught each failure, generated self-critique feedback, and the model corrected course. AEGIS also blocked a dangerous file_destructive action mid-run.">
+<!-- Slide 4: Live Demo transition -->
+<div class="slide" data-notes="Switch to browser now. Show the dashboard, type a query, watch the KERNEL browsers light up, show the verdict feed, trigger the security block, open the adversarial listing.">
   <div class="demo-title">LIVE DEMO</div>
-  <div class="demo-query">"Used couch under $200"</div>
-  <table class="results-tbl">
-    <tr><th>Listing</th><th>Price</th></tr>
-    <tr><td>Loveseat Couch Green Velvet</td><td style="color:#34d399;font-weight:700">$100</td></tr>
-    <tr><td>Couch 3 Seater with Pillows</td><td style="color:#34d399;font-weight:700">$499</td></tr>
-    <tr><td>Reclining Couch</td><td style="color:#34d399;font-weight:700">$350</td></tr>
-  </table>
-  <div class="blocked-badge">AEGIS blocked a file_destructive action during this run</div>
+  <div class="demo-sub">Bargain Radar: multi-marketplace second-hand deal finder</div>
 </div>
 
-<!-- Slide 5: Results (HEADLINE) -->
-<div class="slide" data-notes="Same Northstar 4B model. Same queries. Without AEGIS: zero. With AEGIS: one hundred percent. Every single query succeeded. 16 listings per query. 20 dangerous actions caught. Pure inference-time reliability engineering.">
-  <h2 style="margin-bottom:48px">Same model. Pure inference-time engineering.</h2>
+<!-- Slide 5: Results + CTA (20s) -->
+<div class="slide" data-notes="Same Northstar 4B model. Same queries. Without AEGIS: zero. With AEGIS: one hundred percent. Every single query succeeded. 16 listings per query. 20 dangerous actions caught. Open source, MIT license, github.com/xb1g/cua.">
+  <h2 style="margin-bottom:40px">Same model. Pure inference-time engineering.</h2>
   <div class="headline-row">
     <div class="headline-card bad">
       <div class="headline-label">Without AEGIS</div>
@@ -155,37 +134,15 @@ table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,6
     <div class="stat-box"><div class="stat-num">16.2</div><div class="stat-label">avg listings per query</div></div>
     <div class="stat-box"><div class="stat-num" style="color:#f87171">20</div><div class="stat-label">dangerous actions blocked</div></div>
   </div>
-  <div class="model-note">Northstar 4B. No fine-tuning. No new weights.</div>
-</div>
-
-<!-- Slide 6: Cost -->
-<div class="slide" data-notes="AEGIS with Northstar costs about 50 cents per query for 24 parallel branches. A single Claude Computer Use call costs 2 to 5 dollars and has lower reliability. We're 4-10x cheaper with higher success rate.">
-  <h2>Cheaper than a single Claude CUA call</h2>
-  <table class="cost">
-    <tr><th>Component</th><th>Cost</th></tr>
-    <tr><td>Northstar 4B (24 branches)</td><td>~$0.30</td></tr>
-    <tr><td>Verification (Haiku)</td><td>~$0.15</td></tr>
-    <tr><td>Scanner (Haiku)</td><td>~$0.05</td></tr>
-    <tr class="total"><td>Total per query</td><td>~$0.50</td></tr>
-    <tr class="compare"><td>Claude CUA (1 branch)</td><td>~$2 – $5</td></tr>
-  </table>
-</div>
-
-<!-- Slide 7: Open Source -->
-<div class="slide" data-notes="AEGIS is MIT licensed and wraps any CUA model. Bargain Radar is the reference app. Star the repo, try it with your own agents.">
-  <h2>Open source. MIT license.</h2>
-  <div class="cta-repo">github.com/xb1g/cua</div>
-  <div class="module-list">
-    <code>cua_loop/security.py</code> — dangerous action policy<br>
-    <code>cua_loop/scanner.py</code> — visual prompt-injection scanner<br>
-    <code>cua_loop/scaling.py</code> — wide-scaling orchestration<br>
-    <code>cua_loop/approval.py</code> — human-in-the-loop approval flow
+  <div class="model-note">Northstar 4B. No retraining. No new weights.</div>
+  <div class="cta">
+    <div class="cta-repo">github.com/xb1g/cua</div>
+    <div class="cta-license">Open source. MIT license.</div>
   </div>
-  <div class="compat">Wraps any CUA model: Northstar, Claude Computer Use, Browser Use, Stagehand.</div>
 </div>
 
 <div class="progress" id="progress"></div>
-<div class="slide-counter" id="counter">1 / 7</div>
+<div class="slide-counter" id="counter">1 / 5</div>
 <div class="notes" id="notes"><div class="notes-label">Speaker Notes</div><div id="notes-text"></div></div>
 
 <script>
