@@ -10,7 +10,7 @@ from typing import Any
 MUTATING_ACTIONS = {"click", "double_click", "type", "key", "keypress", "scroll", "hscroll", "drag", "navigate"}
 
 LOOP_WINDOW = 4
-CONSECUTIVE_LIMIT = 3
+CONSECUTIVE_LIMIT = 5
 COORDINATE_RADIUS = 30
 MAX_SAME_TYPE_RATIO = 0.75
 
@@ -41,6 +41,7 @@ class _ActionRecord:
     x: int | None = None
     y: int | None = None
     text: str | None = None
+    keys: str | None = None
 
 
 class LoopBreaker:
@@ -52,11 +53,14 @@ class LoopBreaker:
         self._radius = radius
 
     def record(self, action: Any) -> None:
+        keys_raw = getattr(action, "keys", None)
+        keys_str = "+".join(str(k) for k in keys_raw) if keys_raw else None
         rec = _ActionRecord(
             action_type=str(getattr(action, "type", "")),
             x=getattr(action, "x", None),
             y=getattr(action, "y", None),
             text=getattr(action, "text", None),
+            keys=keys_str,
         )
         self._history.append(rec)
 
@@ -66,7 +70,9 @@ class LoopBreaker:
         count = 1
         last = self._history[-1]
         for prev in reversed(self._history[:-1]):
-            if prev.action_type == last.action_type and prev.x == last.x and prev.y == last.y and prev.text == last.text:
+            if (prev.action_type == last.action_type
+                    and prev.x == last.x and prev.y == last.y
+                    and prev.text == last.text and prev.keys == last.keys):
                 count += 1
             else:
                 break
@@ -77,9 +83,10 @@ class LoopBreaker:
         if consecutive >= CONSECUTIVE_LIMIT:
             last = self._history[-1]
             loc = f" at ({last.x},{last.y})" if last.x is not None else ""
+            keys_info = f" keys={last.keys}" if last.keys else ""
             return ActionVerification(
                 False,
-                f"stuck: {last.action_type}{loc} repeated {consecutive} times consecutively",
+                f"stuck: {last.action_type}{loc}{keys_info} repeated {consecutive} times consecutively",
             )
 
         if len(self._history) < self._window:
