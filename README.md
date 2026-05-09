@@ -15,10 +15,21 @@ generate, and you get a measurable win at inference time.
 ```bash
 uv venv && source .venv/bin/activate
 uv pip install -e .
-cp .env.example .env  # then fill in LIGHTCONE_API_KEY and ANTHROPIC_API_KEY
+cp .env.example .env  # then fill in TZAFON_API_KEY, KERNEL_API_KEY, MINIMAX_API_KEY
 ```
 
-Sign up for Northstar credits: https://lightcone.ai/signup?campaign=HACKMAY9
+- Northstar credits: https://lightcone.ai/signup?campaign=HACKMAY9
+- Kernel API key: https://kernel.sh
+
+## Browser backends
+
+Set `BROWSER_BACKEND` in `.env`:
+
+- `kernel` (default) — uses Kernel cloud browsers. Requires `KERNEL_API_KEY`.
+- `lightcone` — uses Lightcone-managed browsers/desktops. Requires `LIGHTCONE_API_KEY` (or `TZAFON_API_KEY`).
+
+The Northstar model API runs through Lightcone in either case, so
+`TZAFON_API_KEY` / `LIGHTCONE_API_KEY` is always required.
 
 ## Run
 
