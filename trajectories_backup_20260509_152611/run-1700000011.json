@@ -1,0 +1,90 @@
+{
+  "task": "Find cheap phones on craigslist",
+  "url": "https://craigslist.org/search/sss?query=phone",
+  "success": true,
+  "attempts": [
+    {
+      "attempt_index": 0,
+      "trajectory": {
+        "task": "Find cheap phones on craigslist",
+        "url": "https://craigslist.org/search/sss?query=phone",
+        "steps": [
+          {
+            "action_type": "type",
+            "action_args": {
+              "text": "laptop"
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "click",
+            "action_args": {
+              "x": 100,
+              "y": 200
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "scroll",
+            "action_args": {
+              "dx": 0,
+              "dy": 500
+            },
+            "verification_passed": true
+          }
+        ],
+        "final_message": "Found 3 listings",
+        "extracted": [
+          {
+            "title": "Product 1 Plus",
+            "price": "$1945",
+            "url": "https://example.com/item0",
+            "condition": "new"
+          },
+          {
+            "title": "Product 2 Pro",
+            "price": "$389",
+            "url": "https://example.com/item1",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 3 Pro",
+            "price": "$1202",
+            "url": "https://example.com/item2",
+            "condition": "new"
+          }
+        ],
+        "error": null
+      },
+      "verifier": {
+        "success": true,
+        "rows_extracted": 3,
+        "schema_valid": true,
+        "reason": "3 listings with title+price"
+      },
+      "duration_s": 38.29215036881415
+    }
+  ],
+  "extracted": [
+    {
+      "title": "Product 1 Plus",
+      "price": "$1945",
+      "url": "https://example.com/item0",
+      "condition": "new"
+    },
+    {
+      "title": "Product 2 Pro",
+      "price": "$389",
+      "url": "https://example.com/item1",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 3 Pro",
+      "price": "$1202",
+      "url": "https://example.com/item2",
+      "condition": "new"
+    }
+  ],
+  "total_duration_s": 33.11844356940096,
+  "selected_attempt_index": 0
+}

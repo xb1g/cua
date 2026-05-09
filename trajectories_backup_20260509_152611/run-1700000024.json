@@ -1,0 +1,126 @@
+{
+  "task": "Find macbooks on ebay",
+  "url": "https://www.ebay.com/sch/i.html?_nkw=macbook",
+  "success": true,
+  "attempts": [
+    {
+      "attempt_index": 0,
+      "trajectory": {
+        "task": "Find macbooks on ebay",
+        "url": "https://www.ebay.com/sch/i.html?_nkw=macbook",
+        "steps": [
+          {
+            "action_type": "type",
+            "action_args": {
+              "text": "laptop"
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "click",
+            "action_args": {
+              "x": 100,
+              "y": 200
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "scroll",
+            "action_args": {
+              "dx": 0,
+              "dy": 500
+            },
+            "verification_passed": true
+          }
+        ],
+        "final_message": "Found 6 listings",
+        "extracted": [
+          {
+            "title": "Product 1 Plus",
+            "price": "$1350",
+            "url": "https://example.com/item0",
+            "condition": "new"
+          },
+          {
+            "title": "Product 2 Pro",
+            "price": "$171",
+            "url": "https://example.com/item1",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 3 Max",
+            "price": "$959",
+            "url": "https://example.com/item2",
+            "condition": "new"
+          },
+          {
+            "title": "Product 4 Max",
+            "price": "$1017",
+            "url": "https://example.com/item3",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 5 Pro",
+            "price": "$1098",
+            "url": "https://example.com/item4",
+            "condition": "used"
+          },
+          {
+            "title": "Product 6 Plus",
+            "price": "$267",
+            "url": "https://example.com/item5",
+            "condition": "refurbished"
+          }
+        ],
+        "error": null
+      },
+      "verifier": {
+        "success": true,
+        "rows_extracted": 6,
+        "schema_valid": true,
+        "reason": "6 listings with title+price"
+      },
+      "duration_s": 27.96167473306753
+    }
+  ],
+  "extracted": [
+    {
+      "title": "Product 1 Plus",
+      "price": "$1350",
+      "url": "https://example.com/item0",
+      "condition": "new"
+    },
+    {
+      "title": "Product 2 Pro",
+      "price": "$171",
+      "url": "https://example.com/item1",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 3 Max",
+      "price": "$959",
+      "url": "https://example.com/item2",
+      "condition": "new"
+    },
+    {
+      "title": "Product 4 Max",
+      "price": "$1017",
+      "url": "https://example.com/item3",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 5 Pro",
+      "price": "$1098",
+      "url": "https://example.com/item4",
+      "condition": "used"
+    },
+    {
+      "title": "Product 6 Plus",
+      "price": "$267",
+      "url": "https://example.com/item5",
+      "condition": "refurbished"
+    }
+  ],
+  "total_duration_s": 32.52182023608594,
+  "selected_attempt_index": 0
+}

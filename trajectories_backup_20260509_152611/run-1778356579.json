@@ -1,0 +1,100 @@
+{
+  "task": "find me the best deal on bestbuy for a macbook",
+  "url": "https://www.bestbuy.com/home?ref=212&loc=63907719&gclsrc=aw.ds&gad_source=1&gad_campaignid=63907719&gbraid=0AAAAAD-ORIjTtw8trzupVD0x3yfQj6x6M&gclid=CjwKCAjwtvvPBhBuEiwAPMijr9pPLU0omqOkUTjyXGvsWPktbrJW7tSU_7D8r277eNpqeXkNWSMtDxoCdREQAvD_BwE",
+  "success": false,
+  "attempts": [
+    {
+      "attempt_index": 0,
+      "trajectory": {
+        "task": "find me the best deal on bestbuy for a macbook",
+        "url": "https://www.bestbuy.com/home?ref=212&loc=63907719&gclsrc=aw.ds&gad_source=1&gad_campaignid=63907719&gbraid=0AAAAAD-ORIjTtw8trzupVD0x3yfQj6x6M&gclid=CjwKCAjwtvvPBhBuEiwAPMijr9pPLU0omqOkUTjyXGvsWPktbrJW7tSU_7D8r277eNpqeXkNWSMtDxoCdREQAvD_BwE",
+        "steps": [],
+        "final_message": null,
+        "extracted": null,
+        "error": "Invalid or disabled API key"
+      },
+      "verifier": {
+        "success": false,
+        "rows_extracted": 0,
+        "schema_valid": false,
+        "reason": "verifier API error: AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authe"
+      },
+      "duration_s": 15.927919864654541
+    },
+    {
+      "attempt_index": 1,
+      "trajectory": {
+        "task": "find me the best deal on bestbuy for a macbook",
+        "url": "https://www.bestbuy.com/home?ref=212&loc=63907719&gclsrc=aw.ds&gad_source=1&gad_campaignid=63907719&gbraid=0AAAAAD-ORIjTtw8trzupVD0x3yfQj6x6M&gclid=CjwKCAjwtvvPBhBuEiwAPMijr9pPLU0omqOkUTjyXGvsWPktbrJW7tSU_7D8r277eNpqeXkNWSMtDxoCdREQAvD_BwE",
+        "steps": [],
+        "final_message": null,
+        "extracted": null,
+        "error": "Invalid or disabled API key"
+      },
+      "verifier": {
+        "success": false,
+        "rows_extracted": 0,
+        "schema_valid": false,
+        "reason": "verifier API error: AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authe"
+      },
+      "duration_s": 0.7703220844268799
+    },
+    {
+      "attempt_index": 2,
+      "trajectory": {
+        "task": "find me the best deal on bestbuy for a macbook",
+        "url": "https://www.bestbuy.com/home?ref=212&loc=63907719&gclsrc=aw.ds&gad_source=1&gad_campaignid=63907719&gbraid=0AAAAAD-ORIjTtw8trzupVD0x3yfQj6x6M&gclid=CjwKCAjwtvvPBhBuEiwAPMijr9pPLU0omqOkUTjyXGvsWPktbrJW7tSU_7D8r277eNpqeXkNWSMtDxoCdREQAvD_BwE",
+        "steps": [],
+        "final_message": null,
+        "extracted": null,
+        "error": "Invalid or disabled API key"
+      },
+      "verifier": {
+        "success": false,
+        "rows_extracted": 0,
+        "schema_valid": false,
+        "reason": "verifier API error: AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authe"
+      },
+      "duration_s": 0.8643808364868164
+    },
+    {
+      "attempt_index": 3,
+      "trajectory": {
+        "task": "find me the best deal on bestbuy for a macbook",
+        "url": "https://www.bestbuy.com/home?ref=212&loc=63907719&gclsrc=aw.ds&gad_source=1&gad_campaignid=63907719&gbraid=0AAAAAD-ORIjTtw8trzupVD0x3yfQj6x6M&gclid=CjwKCAjwtvvPBhBuEiwAPMijr9pPLU0omqOkUTjyXGvsWPktbrJW7tSU_7D8r277eNpqeXkNWSMtDxoCdREQAvD_BwE",
+        "steps": [],
+        "final_message": null,
+        "extracted": null,
+        "error": "Invalid or disabled API key"
+      },
+      "verifier": {
+        "success": false,
+        "rows_extracted": 0,
+        "schema_valid": false,
+        "reason": "verifier API error: AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authe"
+      },
+      "duration_s": 0.8632800579071045
+    },
+    {
+      "attempt_index": 4,
+      "trajectory": {
+        "task": "find me the best deal on bestbuy for a macbook",
+        "url": "https://www.bestbuy.com/home?ref=212&loc=63907719&gclsrc=aw.ds&gad_source=1&gad_campaignid=63907719&gbraid=0AAAAAD-ORIjTtw8trzupVD0x3yfQj6x6M&gclid=CjwKCAjwtvvPBhBuEiwAPMijr9pPLU0omqOkUTjyXGvsWPktbrJW7tSU_7D8r277eNpqeXkNWSMtDxoCdREQAvD_BwE",
+        "steps": [],
+        "final_message": null,
+        "extracted": null,
+        "error": "Invalid or disabled API key"
+      },
+      "verifier": {
+        "success": false,
+        "rows_extracted": 0,
+        "schema_valid": false,
+        "reason": "verifier API error: AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authe"
+      },
+      "duration_s": 0.8144924640655518
+    }
+  ],
+  "extracted": null,
+  "total_duration_s": 19.339991807937622,
+  "selected_attempt_index": null
+}
