@@ -55,11 +55,12 @@ def _action_to_dict(action: Any) -> dict[str, Any]:
     return {k: getattr(action, k, None) for k in keys if getattr(action, k, None) is not None}
 
 
-def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, **extra: Any) -> None:
+def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, agent_id: str = "agent_0", **extra: Any) -> None:
     try:
         httpx.post(
             "http://localhost:8555/update",
             json={
+                "agent_id": agent_id,
                 "step": step,
                 "task": task,
                 "screenshot_url": screenshot_url,
@@ -72,14 +73,28 @@ def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, **
         pass
 
 
+def _denorm(model_x: int | float, model_y: int | float) -> tuple[int, int]:
+    """Convert Northstar 0–999 model coordinates to pixel coordinates.
+
+    Northstar always outputs in a fixed 0–999 grid regardless of actual
+    screen resolution.  The backend expects pixel coordinates, so we scale
+    here before dispatching any click / drag / scroll with a position.
+    """
+    px = int(model_x / 1000 * DISPLAY_WIDTH)
+    py = int(model_y / 1000 * DISPLAY_HEIGHT)
+    return px, py
+
+
 def _execute_action(b: BrowserBackend, action: Any) -> bool:
     """Dispatch a Northstar action onto the browser backend.
 
     Returns True if the loop should terminate.
     """
     t = action.type
-    x = getattr(action, "x", 0) or 0
-    y = getattr(action, "y", 0) or 0
+    # Raw model coordinates (0–999 space) — must be denormalized before use.
+    mx = getattr(action, "x", 0) or 0
+    my = getattr(action, "y", 0) or 0
+    x, y = _denorm(mx, my)
 
     if t == "click" and getattr(action, "button", "left") == "right":
         b.right_click(x, y)
@@ -92,12 +107,15 @@ def _execute_action(b: BrowserBackend, action: Any) -> bool:
     elif t in ("key", "keypress"):
         b.hotkey(*(getattr(action, "keys", []) or []))
     elif t == "scroll":
-        b.scroll(0, getattr(action, "scroll_y", 0) or 0, x or 640, y or 400)
+        sx, sy = _denorm(mx or 500, my or 500)  # use centre fallback in model space
+        b.scroll(0, getattr(action, "scroll_y", 0) or 0, sx, sy)
     elif t == "hscroll":
-        b.scroll(getattr(action, "scroll_x", 0) or 0, 0, x or 640, y or 400)
+        sx, sy = _denorm(mx or 500, my or 500)
+        b.scroll(getattr(action, "scroll_x", 0) or 0, 0, sx, sy)
     elif t == "drag":
-        end_x = getattr(action, "end_x", x) or x
-        end_y = getattr(action, "end_y", y) or y
+        end_mx = getattr(action, "end_x", mx) or mx
+        end_my = getattr(action, "end_y", my) or my
+        end_x, end_y = _denorm(end_mx, end_my)
         b.drag(x, y, end_x, end_y)
     elif t == "navigate":
         b.navigate(getattr(action, "url", "") or "")
@@ -115,6 +133,7 @@ def run_single_attempt(
     url: str | None = None,
     extra_context: str = "",
     kind: str = "browser",
+    agent_id: str = "agent_0",
 ) -> Trajectory:
     """One pass of the Northstar CUA loop. No retry. No verification."""
     lightcone = Lightcone(timeout=120.0)  # CUA round-trips can be slow; use generous timeout
@@ -129,7 +148,7 @@ def run_single_attempt(
 
     with backend as b:
         screenshot_url = b.screenshot_url()
-        _notify_ui(0, instruction, screenshot_url, status="started")
+        _notify_ui(0, instruction, screenshot_url, status="started", agent_id=agent_id)
 
         response = lightcone.responses.create(
             model=MODEL,
@@ -174,7 +193,7 @@ def run_single_attempt(
             )
             traj.steps.append(step)
             console.print(f"[cyan]step {step_idx}[/cyan] {action.type} {_action_to_dict(action)}")
-            _notify_ui(step_idx, instruction, screenshot_url, action, status="proposed")
+            _notify_ui(step_idx, instruction, screenshot_url, action, status="proposed", agent_id=agent_id)
 
             policy = check_action_policy(action, message_text)
             if not policy.allowed:
@@ -189,6 +208,7 @@ def run_single_attempt(
                     status="blocked",
                     blocked=True,
                     block_reason=policy.reason,
+                    agent_id=agent_id,
                 )
                 console.print(f"[red]blocked unsafe action:[/red] {policy.reason}")
                 break
@@ -212,6 +232,7 @@ def run_single_attempt(
                 status="verified" if action_check.passed else "needs_retry",
                 verification_passed=action_check.passed,
                 verification_reason=action_check.reason,
+                agent_id=agent_id,
             )
             if not action_check.passed:
                 console.print(f"[yellow]action verification failed:[/yellow] {action_check.reason}")
