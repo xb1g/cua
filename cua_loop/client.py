@@ -216,6 +216,43 @@ def _try_parse_json(text: str) -> Any:
                 return [data]
         except (json.JSONDecodeError, ValueError):
             pass
+    if len(text) > 50 and any(w in text.lower() for w in ("$", "price", "listing", "found")):
+        return _llm_extract_listings(text)
+    return None
+
+
+def _llm_extract_listings(text: str) -> list[dict] | None:
+    """Use MiniMax to convert natural-language listing descriptions to JSON."""
+    try:
+        from openai import OpenAI
+        api_key = os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+        base_url = os.getenv("VERIFIER_BASE_URL", "https://api.minimax.chat/v1")
+        model = os.getenv("VERIFIER_MODEL", "MiniMax-M2.7-highspeed")
+        client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=2048,
+            messages=[
+                {"role": "system", "content": (
+                    "Extract product listings from the text below into a JSON array. "
+                    "Each item: {\"title\": str, \"price\": str or null, \"condition\": str or null, "
+                    "\"url\": str or null, \"seller\": str or null, \"location\": str or null}. "
+                    "Respond with ONLY the JSON array, no explanation."
+                )},
+                {"role": "user", "content": text[:3000]},
+            ],
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:])
+            if raw.endswith("```"):
+                raw = raw[:-3].strip()
+        data = json.loads(raw)
+        if isinstance(data, list) and len(data) > 0:
+            return data
+    except Exception:
+        pass
     return None
 
 
