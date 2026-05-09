@@ -39,7 +39,8 @@ MAX_STEPS = int(os.getenv("CUA_MAX_STEPS", "40"))
 _MARKETPLACE_MODE = os.getenv("AEGIS_MARKETPLACE_MODE", "true").lower() in {"1", "true", "yes"}
 APPROVAL_TIMEOUT = int(os.getenv("AEGIS_APPROVAL_TIMEOUT", "60"))
 _DOM_EXTRACTION = os.getenv("AEGIS_DOM_EXTRACTION", "true").lower() in {"1", "true", "yes"}
-_ELEMENT_ANNOTATIONS = os.getenv("AEGIS_ELEMENT_ANNOTATIONS", "true").lower() in {"1", "true", "yes"}
+_ELEMENT_ANNOTATIONS = os.getenv("AEGIS_ELEMENT_ANNOTATIONS", "false").lower() in {"1", "true", "yes"}
+_PAGE_TEXT_INJECTION = os.getenv("AEGIS_PAGE_TEXT_INJECTION", "false").lower() in {"1", "true", "yes"}
 
 SYSTEM_PROMPT = """\
 You are a precise web scraping agent controlling a browser. Follow these rules strictly.
@@ -53,8 +54,7 @@ NAVIGATION:
 - Dismiss cookie banners, popups, and overlays by pressing Escape.
 
 CLICKING DISCIPLINE:
-- You will receive a numbered list of [INTERACTIVE ELEMENTS ON PAGE] with each screenshot. \
-Use the exact (x,y) center coordinates from this list when clicking — do NOT guess coordinates.
+- Before clicking, confirm the target element is fully loaded and visible on screen.
 - If a click produces no visible change, do NOT repeat the same click. Instead try: \
 pressing Enter, using Tab to reach the element, scrolling to reveal it, or using a keyboard shortcut.
 - Never click the same coordinates more than twice. If it fails twice, switch strategy.
@@ -297,24 +297,13 @@ def run_single_attempt(
         screenshot_url = b.screenshot_url()
         _notify_ui(0, instruction, screenshot_url, channel=channel, status="started")
 
-        initial_text = instruction
-        if url and hasattr(b, "extract_page_text"):
-            page_text = b.extract_page_text()
-            if page_text:
-                initial_text += f"\n\n[PAGE TEXT CONTENT]\n{page_text[:3000]}\n[/PAGE TEXT CONTENT]"
-        if _ELEMENT_ANNOTATIONS:
-            elements = get_interactive_elements(b)
-            el_map = format_element_map(elements)
-            if el_map:
-                initial_text += f"\n\n{el_map}"
-
         response = lightcone.responses.create(
             model=MODEL,
             input=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_text", "text": initial_text},
+                        {"type": "input_text", "text": instruction},
                         {"type": "input_image", "image_url": screenshot_url, "detail": "auto"},
                     ],
                 }
