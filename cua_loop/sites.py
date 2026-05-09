@@ -5,16 +5,15 @@ from __future__ import annotations
 from typing import Callable
 from urllib.parse import quote_plus, urlencode
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MarketplaceAdapter(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     generator: Callable[..., str]
     requires_login: bool = False
     bot_detection_level: str = "low"
-
-    class Config:
-        arbitrary_types_allowed = True
 
 
 CRAIGSLIST_SUBDOMAINS: dict[str, str] = {
