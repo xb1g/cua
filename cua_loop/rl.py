@@ -215,7 +215,7 @@ def save_reward_plot(rewards: list[float], policy: RLPolicy, path: Path = DEFAUL
     bar_ax.tick_params(axis="x", rotation=20)
 
     fig.tight_layout()
-    fig.savefig(path)
+    fig.savefig(str(path))
     plt.close(fig)
 
 
