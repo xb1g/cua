@@ -2,9 +2,11 @@ import os
 import asyncio
 import json
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import traceback
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -14,9 +16,15 @@ state = {
     "action": {},
     "step": 0,
     "task": "",
+    "status": "idle", # idle, running, success, failed
+    "result": ""
 }
 
 clients = set()
+
+async def broadcast(data):
+    for q in clients:
+        await q.put(data)
 
 @app.post("/update")
 async def update_state(data: dict):
@@ -24,11 +32,42 @@ async def update_state(data: dict):
     state["action"] = data.get("action", state["action"])
     state["step"] = data.get("step", state["step"])
     state["task"] = data.get("task", state["task"])
-    
-    # Notify clients
-    for q in clients:
-        await q.put(data)
+    if "status" in data:
+        state["status"] = data["status"]
+    if "result" in data:
+        state["result"] = data["result"]
+    await broadcast(state)
     return {"status": "ok"}
+
+class StartRequest(BaseModel):
+    url: str
+    task: str
+
+def run_agent_sync(url: str, task: str):
+    import httpx
+    from cua_loop.runner import run_with_retry
+    try:
+        max_attempts = int(os.getenv("CUA_MAX_ATTEMPTS", "5"))
+        result = run_with_retry(task=task, url=url, max_attempts=max_attempts)
+        if result.success:
+            httpx.post("http://localhost:8555/update", json={"status": "success", "result": f"Success! Extracted {result.rows_extracted} rows."})
+        else:
+            httpx.post("http://localhost:8555/update", json={"status": "failed", "result": result.reason})
+    except Exception as e:
+        httpx.post("http://localhost:8555/update", json={"status": "failed", "result": str(e) + "\\n" + traceback.format_exc()})
+
+@app.post("/start")
+async def start_agent(req: StartRequest, background_tasks: BackgroundTasks):
+    state["status"] = "running"
+    state["task"] = req.task
+    state["screenshot_url"] = ""
+    state["action"] = {}
+    state["step"] = 0
+    state["result"] = ""
+    await broadcast(state)
+    
+    background_tasks.add_task(run_agent_sync, req.url, req.task)
+    return {"status": "started"}
 
 @app.get("/stream")
 async def stream(request: Request):
@@ -36,12 +75,12 @@ async def stream(request: Request):
         q = asyncio.Queue()
         clients.add(q)
         try:
-            yield f"data: {json.dumps(state)}\n\n"
+            yield f"data: {json.dumps(state)}\\n\\n"
             while True:
                 if await request.is_disconnected():
                     break
                 data = await q.get()
-                yield f"data: {json.dumps(data)}\n\n"
+                yield f"data: {json.dumps(data)}\\n\\n"
         finally:
             clients.remove(q)
             
@@ -53,86 +92,169 @@ async def index():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>CUA Live Viewer</title>
+        <title>Symphony CUA Studio</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
-            body { font-family: 'Inter', system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-            h1 { font-size: 24px; margin-bottom: 5px; font-weight: 600; letter-spacing: -0.02em; }
-            .subtitle { color: #94a3b8; margin-bottom: 25px; font-size: 14px; }
-            #container { display: flex; gap: 24px; width: 100%; max-width: 1600px; height: calc(100vh - 120px); }
-            #browser-view { flex: 1; background: #1e293b; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); position: relative; border: 1px solid #334155; display: flex; flex-direction: column; }
-            .browser-header { background: #0f172a; padding: 10px 15px; border-bottom: 1px solid #334155; display: flex; gap: 8px; align-items: center; }
-            .dot { width: 12px; height: 12px; border-radius: 50%; }
-            .dot-red { background: #ef4444; }
-            .dot-yellow { background: #f59e0b; }
-            .dot-green { background: #10b981; }
+            :root {
+                --bg-color: #0f172a;
+                --panel-bg: rgba(30, 41, 59, 0.7);
+                --panel-border: rgba(255, 255, 255, 0.08);
+                --text-main: #f8fafc;
+                --text-muted: #94a3b8;
+                --primary: #3b82f6;
+                --primary-hover: #2563eb;
+                --accent: #8b5cf6;
+                --success: #10b981;
+                --danger: #ef4444;
+                --warning: #f59e0b;
+            }
+            
+            body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 70%); }
+            
+            .header { width: 100%; padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
+            .header h1 { font-size: 20px; margin: 0; font-weight: 700; letter-spacing: -0.02em; background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+            
+            #container { display: flex; gap: 24px; width: 100%; max-width: 1600px; padding: 0 40px; box-sizing: border-box; height: calc(100vh - 100px); }
+            
+            .glass-panel { background: var(--panel-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--panel-border); border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3); }
+            
+            #sidebar { width: 420px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+            
+            /* Form Styles */
+            .input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+            .input-group label { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+            .input-group input, .input-group textarea { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); color: white; padding: 12px 16px; border-radius: 10px; font-size: 14px; outline: none; transition: all 0.2s; font-family: 'Inter', sans-serif; }
+            .input-group input:focus, .input-group textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+            .input-group textarea { resize: vertical; min-height: 80px; }
+            
+            .btn-start { background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); color: white; border: none; padding: 14px 24px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); }
+            .btn-start:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4); }
+            .btn-start:disabled { opacity: 0.6; cursor: not-allowed; transform: none; background: #334155; box-shadow: none; }
+            
+            /* Status Indicator */
+            .status-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--panel-border); }
+            .status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+            
+            .status-idle { background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.2); }
+            .status-running { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.2); }
+            .status-success { background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); }
+            .status-failed { background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
+            
+            .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+            .status-running .status-dot { background: #60a5fa; animation: pulse 1.5s infinite; box-shadow: 0 0 10px #60a5fa; }
+            .status-success .status-dot { background: #34d399; box-shadow: 0 0 10px #34d399; }
+            .status-failed .status-dot { background: #f87171; box-shadow: 0 0 10px #f87171; }
+            .status-idle .status-dot { background: var(--text-muted); }
+            
+            @keyframes pulse {
+                0% { transform: scale(0.95); opacity: 0.5; }
+                50% { transform: scale(1.2); opacity: 1; }
+                100% { transform: scale(0.95); opacity: 0.5; }
+            }
+            
+            /* Action Output */
+            .data-row { margin-bottom: 12px; }
+            .data-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+            .data-value { font-size: 14px; color: var(--text-main); word-break: break-all; }
+            
+            pre { margin: 0; white-space: pre-wrap; font-size: 13px; color: #a5b4fc; background: rgba(15, 23, 42, 0.8); padding: 16px; border-radius: 10px; border: 1px solid var(--panel-border); font-family: 'JetBrains Mono', monospace; max-height: 200px; overflow-y: auto; }
+            
+            /* Browser View */
+            #browser-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+            .browser-header { background: rgba(15, 23, 42, 0.8); padding: 12px 20px; border-bottom: 1px solid var(--panel-border); display: flex; gap: 8px; align-items: center; }
             .browser-content { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
-            #screenshot { max-width: 100%; max-height: 100%; object-fit: contain; }
+            #screenshot { max-width: 100%; max-height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.5s ease; }
+            #screenshot.loaded { opacity: 1; }
             
+            /* Custom Scrollbar */
+            ::-webkit-scrollbar { width: 8px; height: 8px; }
+            ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 4px; }
+            ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+            ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+            
+            /* Cursor overlay */
             #cursor { 
-                position: absolute; 
-                width: 30px; height: 30px; 
-                background: rgba(59, 130, 246, 0.4); 
-                border: 2px solid #3b82f6; 
-                border-radius: 50%; 
-                pointer-events: none; 
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-                display: none; 
-                transform: translate(-50%, -50%); 
-                z-index: 10;
-                box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+                position: absolute; width: 36px; height: 36px; 
+                background: radial-gradient(circle, rgba(59, 130, 246, 0.8) 0%, rgba(59, 130, 246, 0.2) 60%, transparent 100%);
+                border: 2px solid #60a5fa; border-radius: 50%; 
+                pointer-events: none; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); 
+                display: none; transform: translate(-50%, -50%); z-index: 10;
+                box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
             }
-            .cursor-click {
-                animation: click-pulse 0.5s ease-out;
-            }
-            @keyframes click-pulse {
-                0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-                50% { transform: translate(-50%, -50%) scale(0.5); opacity: 0.8; }
-                100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+            .cursor-click { animation: click-ripple 0.6s cubic-bezier(0.1, 0.8, 0.3, 1); }
+            @keyframes click-ripple {
+                0% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; border-width: 4px; }
+                100% { transform: translate(-50%, -50%) scale(2); opacity: 0; border-width: 0px; }
             }
             
-            #sidebar { width: 380px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
-            .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-            .card-title { font-size: 14px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 15px; }
+            .loader { border: 2px solid rgba(255,255,255,0.1); border-top-color: white; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; display: none; }
+            @keyframes spin { to { transform: rotate(360deg); } }
             
-            .badge { display: inline-block; padding: 6px 12px; background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; font-size: 14px; font-weight: 600; margin-bottom: 15px; }
-            
-            .data-row { margin-bottom: 10px; }
-            .data-label { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
-            .data-value { font-size: 14px; color: #f8fafc; word-break: break-all; }
-            
-            pre { margin: 0; white-space: pre-wrap; font-size: 13px; color: #a5b4fc; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; font-family: 'JetBrains Mono', monospace; }
+            #result-box { display: none; margin-top: 15px; padding: 15px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+            .result-success { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #a7f3d0; }
+            .result-failed { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fecaca; }
         </style>
     </head>
     <body>
-        <h1>Live CUA Viewer</h1>
-        <div class="subtitle" id="task-desc">Waiting for task...</div>
+        <div class="header">
+            <h1>Symphony CUA Studio</h1>
+        </div>
         
         <div id="container">
-            <div id="browser-view">
+            <div id="sidebar">
+                <div class="glass-panel">
+                    <div class="status-container">
+                        <div>
+                            <div class="data-label">AGENT STATUS</div>
+                            <div id="status-badge" class="status-badge status-idle">
+                                <div class="status-dot"></div>
+                                <span id="status-text">IDLE</span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="data-label">CURRENT STEP</div>
+                            <div style="font-size: 24px; font-weight: 700; color: var(--primary);"><span id="step-count">0</span><span style="font-size: 14px; color: var(--text-muted); font-weight: 500;">/40</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Target URL</label>
+                        <input type="text" id="target-url" value="https://news.ycombinator.com" placeholder="https://...">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Agent Prompt</label>
+                        <textarea id="target-task" placeholder="e.g. extract top 10 stories with title, url, points as a table">extract top 10 stories with title, url, points as a table</textarea>
+                    </div>
+                    
+                    <button id="btn-start" class="btn-start" onclick="startAgent()">
+                        <span>Start Agent</span>
+                        <div id="btn-loader" class="loader"></div>
+                    </button>
+                    
+                    <div id="result-box"></div>
+                </div>
+                
+                <div class="glass-panel">
+                    <div class="data-row">
+                        <div class="data-label">CURRENT ACTION</div>
+                        <div class="data-value" id="action-type" style="font-weight: 600; color: var(--accent); text-transform: uppercase;">-</div>
+                    </div>
+                    <div class="data-label">ACTION PAYLOAD</div>
+                    <pre id="action-details">{}</pre>
+                </div>
+            </div>
+            
+            <div id="browser-view" class="glass-panel">
                 <div class="browser-header">
                     <div class="dot dot-red"></div>
                     <div class="dot dot-yellow"></div>
                     <div class="dot dot-green"></div>
+                    <div style="margin-left: 15px; font-size: 12px; color: var(--text-muted); font-family: monospace;" id="url-bar">about:blank</div>
                 </div>
                 <div class="browser-content">
-                    <img id="screenshot" src="" alt="Waiting for screenshot..."/>
+                    <img id="screenshot" src="" alt=""/>
                     <div id="cursor"></div>
-                </div>
-            </div>
-            <div id="sidebar">
-                <div class="card">
-                    <div class="card-title">Current State</div>
-                    <div class="badge">Step <span id="step-count">0</span></div>
-                    
-                    <div class="data-row">
-                        <div class="data-label">Action Type</div>
-                        <div class="data-value" id="action-type">-</div>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-title">Action Payload</div>
-                    <pre id="action-details">Waiting for actions...</pre>
                 </div>
             </div>
         </div>
@@ -144,46 +266,101 @@ async def index():
             const actionType = document.getElementById("action-type");
             const stepCount = document.getElementById("step-count");
             const cursor = document.getElementById("cursor");
-            const taskDesc = document.getElementById("task-desc");
+            const statusBadge = document.getElementById("status-badge");
+            const statusText = document.getElementById("status-text");
+            const btnStart = document.getElementById("btn-start");
+            const btnLoader = document.getElementById("btn-loader");
+            const urlBar = document.getElementById("url-bar");
+            const resultBox = document.getElementById("result-box");
             
-            // Assume the virtual display is 1280x720 
             const DISPLAY_WIDTH = 1280;
             const DISPLAY_HEIGHT = 720;
+            
+            screenshot.onload = () => screenshot.classList.add('loaded');
+            
+            async function startAgent() {
+                const url = document.getElementById("target-url").value;
+                const task = document.getElementById("target-task").value;
+                
+                if (!url || !task) return alert("URL and Task are required.");
+                
+                btnStart.disabled = true;
+                btnLoader.style.display = "block";
+                btnStart.querySelector('span').innerText = "Starting...";
+                resultBox.style.display = "none";
+                
+                try {
+                    await fetch("/start", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ url, task })
+                    });
+                } catch(e) {
+                    alert("Failed to start: " + e);
+                    btnStart.disabled = false;
+                    btnLoader.style.display = "none";
+                    btnStart.querySelector('span').innerText = "Start Agent";
+                }
+            }
             
             evtSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 
-                if (data.task) taskDesc.innerText = data.task;
-                if (data.screenshot_url) screenshot.src = data.screenshot_url;
+                if (data.status) {
+                    statusBadge.className = `status-badge status-${data.status}`;
+                    statusText.innerText = data.status.toUpperCase();
+                    
+                    if (data.status === 'running') {
+                        btnStart.disabled = true;
+                        btnLoader.style.display = "block";
+                        btnStart.querySelector('span').innerText = "Agent Running...";
+                        resultBox.style.display = "none";
+                    } else if (data.status === 'success' || data.status === 'failed') {
+                        btnStart.disabled = false;
+                        btnLoader.style.display = "none";
+                        btnStart.querySelector('span').innerText = "Start Agent";
+                        
+                        if (data.result) {
+                            resultBox.style.display = "block";
+                            resultBox.className = data.status === 'success' ? 'result-success' : 'result-failed';
+                            resultBox.innerText = data.result;
+                        }
+                    } else {
+                        btnStart.disabled = false;
+                        btnLoader.style.display = "none";
+                        btnStart.querySelector('span').innerText = "Start Agent";
+                    }
+                }
+                
+                if (data.screenshot_url && data.screenshot_url !== screenshot.src) {
+                    screenshot.classList.remove('loaded');
+                    screenshot.src = data.screenshot_url;
+                }
+                
                 if (data.step !== undefined) stepCount.innerText = data.step;
                 
                 if (data.action && Object.keys(data.action).length > 0) {
+                    if (data.action.url) urlBar.innerText = data.action.url;
+                    
                     actionType.innerText = data.action.type || 'unknown';
                     actionDetails.innerText = JSON.stringify(data.action, null, 2);
                     
-                    // Show click cursor
                     if (data.action.x !== undefined && data.action.y !== undefined) {
                         cursor.style.display = 'block';
                         
-                        // Wait for image to load to get accurate dimensions
                         const updateCursor = () => {
+                            if (!screenshot.complete) return;
                             const imgRect = screenshot.getBoundingClientRect();
-                            
-                            // Calculate scaling (contain mode)
-                            const scaleX = imgRect.width / DISPLAY_WIDTH;
-                            const scaleY = imgRect.height / DISPLAY_HEIGHT;
-                            const scale = Math.min(scaleX, scaleY);
+                            const scale = Math.min(imgRect.width / DISPLAY_WIDTH, imgRect.height / DISPLAY_HEIGHT);
                             
                             const actualWidth = DISPLAY_WIDTH * scale;
                             const actualHeight = DISPLAY_HEIGHT * scale;
-                            
                             const offsetX = (imgRect.width - actualWidth) / 2;
                             const offsetY = (imgRect.height - actualHeight) / 2;
                             
                             const cursorX = offsetX + (data.action.x * scale);
                             const cursorY = offsetY + (data.action.y * scale);
                             
-                            // Set relative to the browser-content container
                             const containerRect = screenshot.parentElement.getBoundingClientRect();
                             const finalX = (imgRect.left - containerRect.left) + cursorX;
                             const finalY = (imgRect.top - containerRect.top) + cursorY;
@@ -193,18 +370,13 @@ async def index():
                             
                             if (data.action.type === 'click') {
                                 cursor.classList.remove('cursor-click');
-                                void cursor.offsetWidth; // trigger reflow
+                                void cursor.offsetWidth;
                                 cursor.classList.add('cursor-click');
                             }
                         };
                         
-                        if (screenshot.complete) {
-                            updateCursor();
-                        } else {
-                            screenshot.onload = updateCursor;
-                        }
-                        
-                        // Handle window resize
+                        if (screenshot.complete) updateCursor();
+                        else screenshot.addEventListener('load', updateCursor, { once: true });
                         window.onresize = updateCursor;
                     } else {
                         cursor.style.display = 'none';
