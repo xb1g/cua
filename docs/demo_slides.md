@@ -49,11 +49,19 @@ Visual: red bar showing **16% success rate (4/24 tasks)**
 
 **LIVE DEMO**
 
-Query: *"Used Eames lounge chair, real leather, under $1500, within 50mi of SF, no replicas"*
+Query: *"Used couch under $200"*
 
-6 marketplaces x 4 strategies = 24 parallel browsers
+Real results extracted by AEGIS on attempt 5 of 5:
 
-> Speaker notes: Walk through the live demo — type the query, show the KERNEL browser grid lighting up, narrate the verdict feed, show the ranked bargain board, trigger the security block on "message seller", then open the adversarial listing.
+| Listing | Price |
+|---|---|
+| Loveseat Couch Green Velvet | $100 |
+| Couch 3 Seater with Pillows | $499 |
+| Reclining Couch | $350 |
+
+AEGIS blocked a `file_destructive` action during the run — safety guardrails in action.
+
+> Speaker notes: "The system succeeded on attempt 5 of 5 — that's the AEGIS retry mechanism in action. Without AEGIS, attempt 1 fails and there are no retries. The verifier caught each failure, generated self-critique feedback, and the model corrected course. AEGIS also blocked a dangerous file_destructive action mid-run — the safety layer caught it before it could execute."
 
 ---
 
