@@ -16,6 +16,7 @@ from tzafon import Lightcone
 
 from cua_loop.action_verifier import LoopBreaker, verify_action_effect
 from aegis_core.verification.middleware import StepState, verify_step
+from cua_loop.audit_log import audit_log
 from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
@@ -220,12 +221,19 @@ def run_single_attempt(
             traj.steps.append(step)
             console.print(f"[cyan]step {step_idx}[/cyan] {action.type} {_action_to_dict(action)}")
             _notify_ui(step_idx, instruction, screenshot_url, action, status="proposed", agent_id=agent_id)
+            audit_log.record("action_proposed", {"step": step_idx, **_action_to_dict(action)})
 
             policy = check_action_policy(action, message_text)
             if not policy.allowed:
                 step.blocked = True
                 step.block_reason = policy.reason
                 traj.error = f"blocked unsafe action: {policy.reason}"
+                audit_log.record("action_blocked", {
+                    "step": step_idx,
+                    "verdict": policy.verdict,
+                    "category": policy.category,
+                    "reason": policy.reason,
+                })
                 _notify_ui(
                     step_idx,
                     instruction,
@@ -245,6 +253,7 @@ def run_single_attempt(
                 step.blocked = True
                 step.block_reason = loop_check.reason
                 traj.error = f"loop detected: {loop_check.reason}"
+                audit_log.record("loop_detected", {"step": step_idx, "reason": loop_check.reason})
                 _notify_ui(
                     step_idx,
                     instruction,
@@ -297,6 +306,10 @@ def run_single_attempt(
                 drift_reason=verdict.drift_reason,
                 retry_strategy=verdict.retry_strategy,
                 agent_id=agent_id,
+            )
+            audit_log.record(
+                "verification_passed" if verdict.on_track else "verification_failed",
+                {"step": step_idx, "reason": verdict.reason, "confidence": verdict.confidence},
             )
             if not verdict.on_track:
                 console.print(f"[yellow]action verification failed:[/yellow] {verdict.reason}")
