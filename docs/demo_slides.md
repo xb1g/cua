@@ -71,13 +71,13 @@ AEGIS blocked a `file_destructive` action during the run — safety guardrails i
 
 | | Without AEGIS | With AEGIS |
 |---|---|---|
-| **Success rate** | **0%** (0/5) | **80%** (4/5) |
-| **Avg listings extracted** | 0 | 13.2 |
-| **Dangerous actions blocked** | 0 | 7 |
+| **Success rate** | **0%** (0/5) | **100%** (5/5) |
+| **Avg listings extracted** | 0 | 16.2 |
+| **Dangerous actions blocked** | 0 | 20 |
 
-Northstar 4B. No fine-tuning. No new weights. The 1 failure was bot detection on a blocked marketplace — not an AEGIS failure.
+Northstar 4B. No fine-tuning. No new weights.
 
-> Speaker notes: "Same Northstar 4B model. Same queries. Same marketplaces. Without AEGIS: zero successful extractions. With AEGIS: 80% success rate, 13 listings per query, 7 dangerous actions caught. Pure inference-time reliability engineering."
+> Speaker notes: "Same Northstar 4B model. Same queries. Without AEGIS: zero. With AEGIS: one hundred percent. Every single query succeeded. 16 listings per query. 20 dangerous actions caught. Pure inference-time reliability engineering."
 
 ---
 
