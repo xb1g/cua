@@ -286,4 +286,39 @@ def extract_listings(
     if not results:
         results = _run_js(backend, _GENERIC_JS)
 
+    if not results:
+        results = _extract_from_page_text(backend, marketplace)
+
     return results
+
+
+def _extract_from_page_text(
+    backend: BrowserBackend, marketplace: str | None = None,
+) -> list[dict[str, Any]]:
+    """Last resort: get visible page text and parse price/title patterns."""
+    if not hasattr(backend, "extract_page_text"):
+        return []
+    try:
+        text = backend.extract_page_text(max_chars=6000)
+    except Exception:
+        return []
+    if not text or len(text) < 20:
+        return []
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    items: list[dict[str, Any]] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        price_match = re.search(r"\$\s*[\d,]+(?:\.\d{2})?", line)
+        if price_match:
+            title = line[:price_match.start()].strip()
+            if not title and i > 0:
+                title = lines[i - 1].strip()
+            if title and len(title) > 3:
+                items.append({
+                    "title": title[:120],
+                    "price": price_match.group().strip(),
+                    "marketplace": marketplace or "unknown",
+                })
+        i += 1
+    return items[:30]
