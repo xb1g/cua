@@ -98,13 +98,25 @@ class QueryResult:
     error: str | None = None
 
 
+_NO_AEGIS_ENV_OVERRIDES = {
+    "AEGIS_ALLOW_DANGEROUS_ACTIONS": "1",
+    "AEGIS_DOM_EXTRACTION": "false",
+    "AEGIS_ELEMENT_ANNOTATIONS": "false",
+    "AEGIS_PAGE_TEXT_INJECTION": "false",
+    "AEGIS_FALLBACK_EXTRACTION": "false",
+    "AEGIS_MARKETPLACE_MODE": "false",
+}
+
+
 def _run_no_aegis(query: dict[str, Any]) -> QueryResult:
-    """Single shot — no retry, no verification, no security."""
+    """Raw Northstar baseline — single attempt, screenshot only, no AEGIS features."""
     started = time.time()
-    env_backup = os.environ.get("AEGIS_ALLOW_DANGEROUS_ACTIONS")
-    os.environ["AEGIS_ALLOW_DANGEROUS_ACTIONS"] = "1"
+    backups = {k: os.environ.get(k) for k in _NO_AEGIS_ENV_OVERRIDES}
+    os.environ.update(_NO_AEGIS_ENV_OVERRIDES)
     try:
-        traj = run_single_attempt(task=query["query"], url=query.get("url"))
+        traj = run_single_attempt(
+            task=query["query"], url=query.get("url"), skip_safety=True,
+        )
         v = verify(traj)
         return QueryResult(
             query=query,
@@ -126,10 +138,11 @@ def _run_no_aegis(query: dict[str, Any]) -> QueryResult:
             error=str(e),
         )
     finally:
-        if env_backup is None:
-            os.environ.pop("AEGIS_ALLOW_DANGEROUS_ACTIONS", None)
-        else:
-            os.environ["AEGIS_ALLOW_DANGEROUS_ACTIONS"] = env_backup
+        for k, v in backups.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def _run_with_config(query: dict[str, Any], config: AblationConfig) -> QueryResult:
