@@ -7,11 +7,12 @@ Reliability and safety infrastructure for computer-use agents, demonstrated thro
 
 **Model-agnostic** — works with Northstar, Kimi K2.6 Turbo (via Fireworks), or any OpenAI-compatible CUA model.
 
-AEGIS wraps any CUA model with three inference-time layers:
+AEGIS wraps any CUA model with four inference-time layers:
 
-- **Wide scaling**: run many browser attempts in parallel across Kernel browser instances, then select the best verified trajectory.
-- **Action verification**: check after each action whether the screen changed as expected and whether the agent is still on track.
-- **Security guardrails**: block dangerous actions like contacting sellers, sending money, submitting credentials, or clicking phishing links unless a human approves.
+- **Orchestrator**: central brain that coordinates the swarm — assigns search strategies per branch, monitors progress in real-time, stops early when enough results are found, and cascades each branch through CUA → DOM extraction → fallback scripts.
+- **Wide scaling**: run many browser attempts in parallel across Kernel browser instances, then select the best verified trajectory. Cross-branch learning lets successful branches teach failing ones.
+- **Action verification**: check after each action whether the screen changed as expected, detect stuck loops, extract DOM data mid-loop, and rescue results before termination.
+- **Security guardrails**: block dangerous actions like contacting sellers, sending money, submitting credentials, or clicking phishing links unless a human approves. Scan every screenshot for visual prompt injection. Detect scam patterns and replicas.
 
 The demo application is **Bargain Radar**: a user describes what they want, and AEGIS fans out across second-hand marketplace sites — Facebook Marketplace, Craigslist, OfferUp, Mercari, eBay, Reverb — to find, verify, deduplicate, and rank the best deals.
 
@@ -59,12 +60,20 @@ Recommended live demo targets:
 
 ## Repo Structure
 
+### Orchestrator
+
+- `cua_loop/orchestrator.py` — central swarm coordinator: assigns strategies to branches, monitors progress in real-time, triggers early stopping, cascades CUA → DOM → fallback per branch (run via `aegis-orchestrate`).
+- `cua_loop/strategies.py` — strategy definitions for each marketplace (keyword search, category browse, price filter, sort newest).
+- `cua_loop/cascade.py` — adaptive cascade logic: CUA attempt → DOM extraction rescue → fallback Playwright scripts.
+- `cua_loop/models.py` — model provider abstraction: Northstar via Lightcone, Kimi K2.6 via Fireworks, or any OpenAI-compatible CUA.
+- `cua_loop/validator.py` — LLM-based validator and strategic guider: validates actions, provides guidance when stuck, verifies extracted results.
+
 ### Core CUA Loop
 
-- `cua_loop/client.py` — single-attempt CUA inner loop with Northstar + pluggable browser backend, action policy checks, stuck-detection, and DOM extraction.
+- `cua_loop/client.py` — single-attempt CUA inner loop with pluggable browser backend, action policy checks, stuck-detection, and DOM extraction.
 - `cua_loop/backends/` — browser backend protocol + implementations for Kernel cloud browsers and Lightcone-managed browsers. Exposes `execute_playwright()` and `wait_for_page_load()` for DOM access.
-- `cua_loop/runner.py` — retry loop with self-critique on failure.
-- `cua_loop/scaling.py` — parallel wide-scaling branch runner with marketplace scoring, deduplication, and multi-site fan-out.
+- `cua_loop/runner.py` — retry loop with self-critique on failure, fallback extraction on exhaustion.
+- `cua_loop/scaling.py` — parallel wide-scaling branch runner with marketplace scoring, deduplication, cross-branch learning, and multi-site fan-out.
 - `cua_loop/types.py` — Pydantic models: `Step`, `Trajectory`, `VerifierResult`, `AttemptResult`, `RunResult`.
 
 ### Verification and Safety
@@ -88,6 +97,10 @@ Recommended live demo targets:
 - `cua_loop/rl.py` — contextual bandit over Kernel-backed search strategies.
 - `cua_loop/critic.py` — self-critique feedback for retry loops.
 - `cua_loop/element_annotator.py` — DOM-aware clickable element bounding box annotation.
+- `cua_loop/url_params.py` — URL parameter optimization: maximally-filtered search URLs per marketplace.
+- `cua_loop/cross_branch.py` — cross-branch learning: successful branches teach failing ones their strategy.
+- `cua_loop/fallback_scripts.py` — deterministic Playwright fallback extraction when CUA fails.
+- `cua_loop/pagination.py` — scroll-and-accumulate: JS-driven pagination for marketplace extraction.
 - `cua_loop/self_check.py` — deterministic safety self-checks (run via `aegis-check`).
 - `cua_loop/ui_server.py` — live demo dashboard with Kernel browser grid, split-screen comparison, verdict feed, and ranked bargain board.
 - `cua_loop/demo.py` — CLI entry point.
@@ -202,6 +215,13 @@ uv run cua-loop \
   --task "Find genuine used Eames lounge chairs under \$1500 within 50 miles of San Francisco. Reject replicas, sold listings, and obvious scams."
 ```
 
+Run the full orchestrated marketplace search (recommended):
+
+```bash
+uv run aegis-orchestrate \
+  --task "Used Eames lounge chair under \$1500 within 50 miles of SF, no replicas"
+```
+
 Run the local deterministic self-checks:
 
 ```bash
@@ -238,25 +258,32 @@ This trains a contextual bandit over prompt/search strategies. It supports `--al
 User bargain query (natural language)
    |
    v
-AEGIS wide scaling
-   |-- branch 1: Kernel browser + Craigslist + strategy A
-   |-- branch 2: Kernel browser + OfferUp + strategy B
-   |-- branch 3: Kernel browser + Mercari + strategy C
-   |-- branch 4: Kernel browser + eBay used + strategy D
-   |-- branch 5: Kernel browser + Reverb + strategy E
-   |-- branch 6: Kernel browser + FB Marketplace (Managed Auth) + strategy F
-   |-- ... up to N branches per (marketplace × strategy variant) ...
+AEGIS Orchestrator (central swarm coordinator)
+   - parses query → budget, distance, conditions, keywords
+   - assigns strategies per branch (keyword, category, price filter, sort newest)
+   - monitors progress in real-time, stops early when enough results found
    |
    v
-Per-action guardrail + verification loop
-   - screen-change check
-   - on-track classifier
-   - loop-breaker
+Wide Scaling (parallel KERNEL browsers)
+   |-- branch 1: Kernel browser + Craigslist + keyword search
+   |-- branch 2: Kernel browser + OfferUp + category browse
+   |-- branch 3: Kernel browser + Mercari + price filter
+   |-- branch 4: Kernel browser + eBay used + sort newest
+   |-- branch 5: Kernel browser + Reverb + keyword search
+   |-- ... up to N branches per (marketplace × strategy) ...
+   |
+   v
+Per-action verification + security loop
+   - screen-change check + stuck detection + loop breaker
+   - mid-loop DOM extraction (detects results early)
    - visual prompt-injection scanner (every screenshot)
    - dangerous-action policy engine (every proposed action)
+   - human approval flow (message seller, buy now)
    |
    v
-Trajectory verifier / judge (best-of-N selection)
+Adaptive cascade per branch
+   CUA attempt → DOM extraction rescue → fallback Playwright scripts
+   Cross-branch learning: successful branches teach failing ones
    |
    v
 Bargain Radar listing scorer
@@ -288,10 +315,10 @@ In addition: **visual prompt-injection** in listing descriptions or images (e.g.
 ## Tests
 
 ```bash
-# Unit tests (no API keys required)
-uv run pytest tests/ -m "not integration"
+# All tests (no API keys required)
+uv run pytest tests/
 
-# Integration tests (requires ANTHROPIC_API_KEY)
+# Integration tests only (requires API keys)
 uv run pytest tests/ -m integration
 ```
 
@@ -323,6 +350,13 @@ uv run pytest tests/ -m integration
 - [x] Keyboard-first navigation strategy
 - [x] Stuck-detection and recovery
 - [x] Evaluation harness (20 held-out queries, 5 ablation configs)
+- [x] Central orchestrator with strategy assignment and adaptive cascade
+- [x] Cross-branch learning (successful branches teach failing ones)
+- [x] Fallback Playwright extraction scripts
+- [x] Scroll-and-accumulate JS pagination
+- [x] URL parameter optimization per marketplace
+- [x] LLM-based validator and strategic guider
+- [x] Multi-model support (Northstar, Kimi K2.6, OpenAI-compatible)
 
 ## License
 
