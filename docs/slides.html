@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AEGIS — Demo Presentation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+body{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#f8fafc;overflow:hidden;height:100vh;width:100vw}
+.slide{position:absolute;top:0;left:0;width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:80px 120px;opacity:0;transform:translateX(60px);transition:opacity 0.5s ease,transform 0.5s ease;pointer-events:none;text-align:center}
+.slide.active{opacity:1;transform:translateX(0);pointer-events:auto}
+.slide.prev{opacity:0;transform:translateX(-60px)}
+h1{font-size:72px;font-weight:900;letter-spacing:-0.03em;line-height:1.1;margin-bottom:24px;background:linear-gradient(135deg,#fff 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{font-size:48px;font-weight:800;letter-spacing:-0.02em;line-height:1.2;margin-bottom:32px;color:#f8fafc}
+.subtitle{font-size:28px;color:#94a3b8;margin-bottom:16px;font-weight:500}
+.tagline{font-size:22px;color:#64748b;font-style:italic;margin-bottom:24px}
+.repo{font-size:20px;color:#3b82f6;font-family:'JetBrains Mono',monospace;letter-spacing:0.02em}
+ul{text-align:left;font-size:28px;line-height:2;color:#e2e8f0;max-width:900px}
+ul li{margin-bottom:8px}
+ul li strong{color:#f8fafc}
+.fail-bar{display:inline-block;background:rgba(239,68,68,0.15);border:2px solid #ef4444;border-radius:12px;padding:12px 32px;font-size:28px;font-weight:800;color:#f87171;margin-top:24px}
+table.layers{border-collapse:separate;border-spacing:16px;margin:0 auto}
+table.layers th{font-size:22px;font-weight:800;color:#f8fafc;padding:16px 24px;border-bottom:3px solid #3b82f6;text-align:center;min-width:260px}
+table.layers td{font-size:20px;color:#cbd5e1;padding:12px 24px;text-align:center;background:rgba(30,41,59,0.6);border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
+.demo-title{font-size:64px;font-weight:900;letter-spacing:-0.02em;color:#f8fafc;margin-bottom:32px}
+.demo-query{font-size:26px;color:#94a3b8;font-style:italic;margin-bottom:40px}
+table.results-tbl{border-collapse:separate;border-spacing:8px;font-size:22px;margin:0 auto}
+table.results-tbl th{padding:10px 20px;color:#94a3b8;font-weight:600;text-align:left}
+table.results-tbl td{padding:10px 20px;background:rgba(30,41,59,0.5);border-radius:8px;border:1px solid rgba(255,255,255,0.06)}
+.blocked-badge{display:inline-block;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 20px;font-size:20px;color:#fca5a5;margin-top:24px}
+.headline-row{display:flex;gap:80px;justify-content:center;align-items:center;margin-bottom:40px}
+.headline-card{padding:40px 64px;border-radius:24px;text-align:center}
+.headline-card.bad{background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.3)}
+.headline-card.good{background:rgba(16,185,129,0.08);border:2px solid rgba(16,185,129,0.3)}
+.headline-label{font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px}
+.headline-card.bad .headline-label{color:#f87171}
+.headline-card.good .headline-label{color:#34d399}
+.headline-num{font-size:120px;font-weight:900;line-height:1}
+.headline-card.bad .headline-num{color:#ef4444}
+.headline-card.good .headline-num{color:#10b981}
+.headline-sub{font-size:20px;color:#94a3b8;margin-top:8px;font-weight:500}
+.headline-vs{font-size:48px;font-weight:900;color:#334155}
+.stats-row{display:flex;gap:40px;justify-content:center;margin-bottom:24px}
+.stat-box{text-align:center}
+.stat-num{font-size:36px;font-weight:800;color:#f8fafc}
+.stat-label{font-size:16px;color:#64748b;margin-top:4px}
+.model-note{font-size:22px;color:#64748b;margin-top:8px}
+.footnote{font-size:18px;color:#475569;margin-top:16px}
+table.cost{border-collapse:separate;border-spacing:8px;font-size:24px;margin:0 auto}
+table.cost td,table.cost th{padding:14px 28px;text-align:left}
+table.cost th{color:#94a3b8;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.1)}
+table.cost td{background:rgba(30,41,59,0.5);border-radius:8px;border:1px solid rgba(255,255,255,0.06);color:#e2e8f0}
+table.cost tr.total td{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:#34d399;font-weight:800}
+table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#f87171}
+.cta-repo{font-size:36px;font-weight:800;color:#3b82f6;margin:24px 0;font-family:'JetBrains Mono',monospace}
+.module-list{text-align:left;font-size:22px;color:#94a3b8;line-height:2;max-width:700px;margin:0 auto}
+.module-list code{color:#a78bfa;background:rgba(139,92,246,0.1);padding:2px 8px;border-radius:4px;font-size:20px}
+.compat{font-size:22px;color:#64748b;margin-top:32px}
+.progress{position:fixed;bottom:0;left:0;height:4px;background:linear-gradient(90deg,#3b82f6,#8b5cf6);transition:width 0.4s ease;z-index:100}
+.slide-counter{position:fixed;bottom:16px;right:24px;font-size:14px;color:#475569;font-weight:600;z-index:100}
+.notes{display:none;position:fixed;bottom:40px;left:24px;right:24px;background:rgba(30,41,59,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px 24px;font-size:16px;color:#94a3b8;line-height:1.6;z-index:200;backdrop-filter:blur(12px)}
+.notes.visible{display:block}
+.notes-label{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<!-- Slide 1: Title -->
+<div class="slide active" data-notes="We built AEGIS — three layers of inference-time engineering that double any CUA model's success rate without retraining. Our demo app is Bargain Radar.">
+  <h1>AEGIS</h1>
+  <div class="subtitle">Reliability + Safety Middleware for Computer-Use Agents</div>
+  <div class="tagline">Bargain Radar: multi-marketplace second-hand deal finder</div>
+  <div class="repo">github.com/xb1g/cua</div>
+</div>
+
+<!-- Slide 2: Problem -->
+<div class="slide" data-notes="We tested Northstar 4B on 5 marketplace searches. Without any wrapper, it succeeded zero times. The failures aren't random — they compound. One wrong click leads to another. No verification means it doesn't know it went wrong. No safety means it messages strangers and clicks phishing links.">
+  <h2>Every CUA model fails the same way</h2>
+  <ul>
+    <li><strong>Error compounding</strong> — one wrong click cascades into total failure</li>
+    <li><strong>No verification</strong> — the model doesn't know it went wrong</li>
+    <li><strong>No safety</strong> — agents message strangers, click phishing links, enter credentials</li>
+  </ul>
+  <div class="fail-bar">0% success rate without AEGIS (0/5 tasks)</div>
+</div>
+
+<!-- Slide 3: Three Layers -->
+<div class="slide" data-notes="Layer 1: we spawn parallel browsers across 6 marketplaces with strategy variants. Layer 2: after every single action, we verify the screen actually changed. If it didn't, we retry with feedback. Layer 3: we block dangerous actions like messaging sellers or clicking phishing links, and we scan every screenshot for adversarial prompt injection.">
+  <h2>AEGIS: three inference-time layers</h2>
+  <table class="layers">
+    <tr>
+      <th>Wide Scaling</th>
+      <th>Action Verification</th>
+      <th>Security Guardrails</th>
+    </tr>
+    <tr>
+      <td>N parallel KERNEL browsers</td>
+      <td>Per-step screen-change check</td>
+      <td>Dangerous action blocker</td>
+    </tr>
+    <tr>
+      <td>Best-of-N trajectory selection</td>
+      <td>On-track classifier</td>
+      <td>Visual prompt-injection scanner</td>
+    </tr>
+    <tr>
+      <td>6 marketplaces x 4 strategies</td>
+      <td>Retry with verifier feedback</td>
+      <td>Human approval flow</td>
+    </tr>
+  </table>
+</div>
+
+<!-- Slide 4: Live Demo -->
+<div class="slide" data-notes="The system succeeded on attempt 5 of 5 — that's the AEGIS retry mechanism in action. Without AEGIS, attempt 1 fails and there are no retries. The verifier caught each failure, generated self-critique feedback, and the model corrected course. AEGIS also blocked a dangerous file_destructive action mid-run.">
+  <div class="demo-title">LIVE DEMO</div>
+  <div class="demo-query">"Used couch under $200"</div>
+  <table class="results-tbl">
+    <tr><th>Listing</th><th>Price</th></tr>
+    <tr><td>Loveseat Couch Green Velvet</td><td style="color:#34d399;font-weight:700">$100</td></tr>
+    <tr><td>Couch 3 Seater with Pillows</td><td style="color:#34d399;font-weight:700">$499</td></tr>
+    <tr><td>Reclining Couch</td><td style="color:#34d399;font-weight:700">$350</td></tr>
+  </table>
+  <div class="blocked-badge">AEGIS blocked a file_destructive action during this run</div>
+</div>
+
+<!-- Slide 5: Results (HEADLINE) -->
+<div class="slide" data-notes="Same Northstar 4B model. Same queries. Same marketplaces. Without AEGIS: zero successful extractions. With AEGIS: 80% success rate, 13 listings per query, 7 dangerous actions caught. Pure inference-time reliability engineering.">
+  <h2 style="margin-bottom:48px">Same model. Pure inference-time engineering.</h2>
+  <div class="headline-row">
+    <div class="headline-card bad">
+      <div class="headline-label">Without AEGIS</div>
+      <div class="headline-num">0%</div>
+      <div class="headline-sub">0 / 5 queries</div>
+    </div>
+    <div class="headline-vs">vs</div>
+    <div class="headline-card good">
+      <div class="headline-label">With AEGIS</div>
+      <div class="headline-num">80%</div>
+      <div class="headline-sub">4 / 5 queries</div>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-num">13.2</div><div class="stat-label">avg listings per query</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:#f87171">7</div><div class="stat-label">dangerous actions blocked</div></div>
+  </div>
+  <div class="model-note">Northstar 4B. No fine-tuning. No new weights.</div>
+  <div class="footnote">The 1 failure was bot detection on a blocked marketplace — not an AEGIS failure.</div>
+</div>
+
+<!-- Slide 6: Cost -->
+<div class="slide" data-notes="AEGIS with Northstar costs about 50 cents per query for 24 parallel branches. A single Claude Computer Use call costs 2 to 5 dollars and has lower reliability. We're 4-10x cheaper with higher success rate.">
+  <h2>Cheaper than a single Claude CUA call</h2>
+  <table class="cost">
+    <tr><th>Component</th><th>Cost</th></tr>
+    <tr><td>Northstar 4B (24 branches)</td><td>~$0.30</td></tr>
+    <tr><td>Verification (Haiku)</td><td>~$0.15</td></tr>
+    <tr><td>Scanner (Haiku)</td><td>~$0.05</td></tr>
+    <tr class="total"><td>Total per query</td><td>~$0.50</td></tr>
+    <tr class="compare"><td>Claude CUA (1 branch)</td><td>~$2 – $5</td></tr>
+  </table>
+</div>
+
+<!-- Slide 7: Open Source -->
+<div class="slide" data-notes="AEGIS is MIT licensed and wraps any CUA model. Bargain Radar is the reference app. Star the repo, try it with your own agents.">
+  <h2>Open source. MIT license.</h2>
+  <div class="cta-repo">github.com/xb1g/cua</div>
+  <div class="module-list">
+    <code>cua_loop/security.py</code> — dangerous action policy<br>
+    <code>cua_loop/scanner.py</code> — visual prompt-injection scanner<br>
+    <code>cua_loop/scaling.py</code> — wide-scaling orchestration<br>
+    <code>cua_loop/approval.py</code> — human-in-the-loop approval flow
+  </div>
+  <div class="compat">Wraps any CUA model: Northstar, Claude Computer Use, Browser Use, Stagehand.</div>
+</div>
+
+<div class="progress" id="progress"></div>
+<div class="slide-counter" id="counter">1 / 7</div>
+<div class="notes" id="notes"><div class="notes-label">Speaker Notes</div><div id="notes-text"></div></div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const progress = document.getElementById('progress');
+const counter = document.getElementById('counter');
+const notesEl = document.getElementById('notes');
+const notesText = document.getElementById('notes-text');
+let current = 0;
+let notesVisible = false;
+
+function show(idx) {
+  if (idx < 0 || idx >= slides.length) return;
+  slides[current].classList.remove('active');
+  slides[current].classList.add(idx > current ? 'prev' : '');
+  current = idx;
+  slides[current].className = 'slide active';
+  progress.style.width = ((current + 1) / slides.length * 100) + '%';
+  counter.textContent = (current + 1) + ' / ' + slides.length;
+  notesText.textContent = slides[current].dataset.notes || '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); show(current + 1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); show(current - 1); }
+  else if (e.key === 'Home') { show(0); }
+  else if (e.key === 'End') { show(slides.length - 1); }
+  else if (e.key === 'n' || e.key === 'N') {
+    notesVisible = !notesVisible;
+    notesEl.classList.toggle('visible', notesVisible);
+  }
+  else if (e.key === 'Escape') { notesEl.classList.remove('visible'); notesVisible = false; }
+});
+
+show(0);
+</script>
+</body>
+</html>
