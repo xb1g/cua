@@ -9,6 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.console import Console
 
 from cua_loop.client import run_single_attempt
+from cua_loop.cross_branch import build_cross_branch_hint, should_retry_with_hints
+from cua_loop.fallback_scripts import run_fallback_extraction
 from cua_loop.marketplace import (
     coerce_marketplace_listing,
     dedupe_across_marketplaces,
@@ -25,6 +27,7 @@ console = Console()
 
 DEFAULT_WIDTH = int(os.getenv("AEGIS_WIDTH", "3"))
 _MARKETPLACE_MODE = os.getenv("AEGIS_MARKETPLACE_MODE", "true").lower() in {"1", "true", "yes"}
+_CROSS_BRANCH_RETRY = os.getenv("AEGIS_CROSS_BRANCH_RETRY", "true").lower() in {"1", "true", "yes"}
 
 
 def _score(attempt: AttemptResult) -> tuple[int, int, int, float]:
@@ -57,12 +60,14 @@ def _score_marketplace_results(extracted: object, task: str) -> list:
     return scores
 
 
-def _run_branch(task: str, url: str | None, branch_index: int) -> AttemptResult:
+def _run_branch(task: str, url: str | None, branch_index: int, extra_hint: str = "") -> AttemptResult:
     started = time.time()
     extra_context = (
         f"Wide-scaling branch {branch_index}. Try a distinct strategy. "
         "Prefer safe, reversible actions and verify page state before important clicks."
     )
+    if extra_hint:
+        extra_context += f"\n\n{extra_hint}"
     try:
         traj = run_single_attempt(task=task, url=url, extra_context=extra_context)
     except Exception as exc:
@@ -127,8 +132,10 @@ def run_marketplace_scaling(
 ) -> RunResult:
     """Fan out a NL query across multiple marketplaces in parallel.
 
-    Parses the task string into structured fields, generates search URLs for
-    each marketplace, then runs CUA branches against all of them concurrently.
+    Parses the task string into structured fields, generates maximally-filtered
+    search URLs for each marketplace, then runs CUA branches concurrently.
+    Failed branches are retried with cross-branch learning hints from successful
+    ones, and ultimately rescued by fallback programmatic extraction.
     """
     parsed = parse_query(task)
     urls = generate_all_filtered_urls(
@@ -148,6 +155,9 @@ def run_marketplace_scaling(
             branch_index += 1
 
     total_branches = len(site_branches)
+    site_for_index: dict[int, str] = {idx: name for name, _, idx in site_branches}
+    url_for_index: dict[int, str] = {idx: u for _, u, idx in site_branches}
+
     console.rule(f"[bold]AEGIS marketplace fan-out: {len(urls)} sites x {width_per_site} = {total_branches} branches")
 
     with ThreadPoolExecutor(max_workers=total_branches) as pool:
@@ -164,6 +174,55 @@ def run_marketplace_scaling(
                 f"success={attempt.verifier.success} "
                 f"rows={attempt.verifier.rows_extracted}"
             )
+
+    # Cross-branch learning: retry failed branches with demos from successful ones
+    if _CROSS_BRANCH_RETRY and should_retry_with_hints(attempts):
+        successful = [
+            (site_for_index.get(a.attempt_index, ""), a)
+            for a in attempts if a.verifier.success
+        ]
+        failed_branches = [
+            (site_for_index.get(a.attempt_index, ""), url_for_index.get(a.attempt_index, ""), a.attempt_index)
+            for a in attempts if not a.verifier.success
+        ]
+        console.print(
+            f"[yellow]cross-branch retry:[/yellow] {len(successful)} succeeded, "
+            f"retrying {len(failed_branches)} failed with demonstrations"
+        )
+        retry_index = branch_index
+        with ThreadPoolExecutor(max_workers=max(1, len(failed_branches))) as pool:
+            retry_futures = {}
+            for failed_site, failed_url, _ in failed_branches:
+                hint = build_cross_branch_hint(successful, failed_site)
+                retry_futures[pool.submit(_run_branch, task, failed_url, retry_index, hint)] = failed_site
+                retry_index += 1
+            for future in as_completed(retry_futures):
+                site_name = retry_futures[future]
+                attempt = future.result()
+                attempts.append(attempt)
+                console.print(
+                    f"[{site_name}] retry {attempt.attempt_index}: "
+                    f"success={attempt.verifier.success} "
+                    f"rows={attempt.verifier.rows_extracted}"
+                )
+
+    # Fallback: programmatic extraction for any still-failing branches
+    for attempt in list(attempts):
+        if attempt.verifier.success:
+            continue
+        failed_url = url_for_index.get(attempt.attempt_index) or attempt.trajectory.url
+        if not failed_url:
+            continue
+        site_name = site_for_index.get(attempt.attempt_index, "unknown")
+        fallback = run_fallback_extraction(failed_url)
+        if fallback:
+            attempt.trajectory.extracted = fallback
+            attempt.trajectory.error = None
+            attempt.verifier = VerifierResult(
+                success=True, rows_extracted=len(fallback),
+                schema_valid=True, reason="fallback programmatic extraction",
+            )
+            console.print(f"[green][{site_name}] fallback rescued {len(fallback)} listings[/green]")
 
     selected = max(attempts, key=_score)
 

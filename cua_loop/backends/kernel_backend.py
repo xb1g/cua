@@ -23,6 +23,58 @@ from kernel import Kernel
 # Snap-to-element radius. 0 disables snapping entirely (raw model coords).
 SNAP_RADIUS = int(os.getenv("CUA_SNAP_RADIUS", "30"))
 
+# Northstar key tokens → Kernel/Chromium canonical key names.
+_KEY_ALIASES = {
+    "control": "Ctrl",
+    "ctrl": "Ctrl",
+    "command": "Meta",
+    "cmd": "Meta",
+    "meta": "Meta",
+    "win": "Meta",
+    "super": "Meta",
+    "option": "Alt",
+    "opt": "Alt",
+    "alt": "Alt",
+    "shift": "Shift",
+    "enter": "Enter",
+    "return": "Enter",
+    "escape": "Escape",
+    "esc": "Escape",
+    "tab": "Tab",
+    "backspace": "Backspace",
+    "delete": "Delete",
+    "del": "Delete",
+    "space": "Space",
+    "spacebar": "Space",
+    "home": "Home",
+    "end": "End",
+    "pageup": "PageUp",
+    "pagedown": "PageDown",
+    "up": "ArrowUp",
+    "down": "ArrowDown",
+    "left": "ArrowLeft",
+    "right": "ArrowRight",
+    "arrowup": "ArrowUp",
+    "arrowdown": "ArrowDown",
+    "arrowleft": "ArrowLeft",
+    "arrowright": "ArrowRight",
+}
+
+
+def _map_key(token: str) -> str:
+    """Map a Northstar key token to Kernel's expected key name."""
+    if not token:
+        return ""
+    lk = token.strip().lower()
+    if lk in _KEY_ALIASES:
+        return _KEY_ALIASES[lk]
+    if len(token) == 1:
+        return token  # 'a', '/', '1' — pass through, case preserved
+    # Function keys F1..F24 stay capitalized; everything else gets capitalized.
+    if lk.startswith("f") and lk[1:].isdigit():
+        return "F" + lk[1:]
+    return token.capitalize()
+
 # Playwright snippet: given (x, y) in the page viewport, return the centre of
 # the nearest interactive ancestor element if any, plus a debug label.
 _SNAP_JS = """
@@ -92,32 +144,84 @@ class KernelBackend:
         self._sid: str | None = None
 
     def __enter__(self) -> "KernelBackend":
-        self._browser = self._kernel.browsers.create()
-        self._sid = self._browser.session_id
+        # Stealth mode matters for marketplace sites with bot detection.
+        # Viewport pinned to the same dims Northstar denormalizes against so
+        # screenshot pixels and click coordinates agree.
+        # Build kwargs dynamically so unknown options (across SDK versions)
+        # don't blow up at type-check or runtime.
+        opts: dict[str, Any] = {
+            "stealth_mode": True,
+            "viewport": {
+                "width": int(os.getenv("CUA_DISPLAY_WIDTH", "1280")),
+                "height": int(os.getenv("CUA_DISPLAY_HEIGHT", "720")),
+            },
+        }
+        try:
+            self._browser = self._kernel.browsers.create(**opts)
+        except TypeError:
+            # Older SDK rejects unknown kwargs — strip and retry minimally.
+            try:
+                self._browser = self._kernel.browsers.create(viewport=opts["viewport"])
+            except TypeError:
+                self._browser = self._kernel.browsers.create()
+        # Canonical SDK exposes `id`; some versions use `session_id`.
+        self._sid = getattr(self._browser, "id", None) or getattr(
+            self._browser, "session_id", None
+        )
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
+    def __exit__(self, _exc_type, _exc, _tb) -> None:
         if self._sid is None:
             return
         try:
-            self._kernel.browsers.delete(id=self._sid)
+            self._kernel.browsers.delete(self._sid)
         except Exception:
             pass
 
     def screenshot_url(self) -> str:
-        result = self._kernel.browsers.computer.capture_screenshot(id=self._sid)
+        result = self._kernel.browsers.computer.capture_screenshot(self._sid)
         b = _png_bytes(result)
         return "data:image/png;base64," + base64.b64encode(b).decode()
 
-    def _exec_pw(self, code: str) -> Any:
-        """Run a Playwright snippet inside the Kernel browser VM."""
+    def get_dom_state(self) -> dict[str, Any]:
+        """Return a lightweight summary of the DOM state for verification."""
+        snippet = """
+        return {
+            url: window.location.href,
+            title: document.title,
+            active_tag: document.activeElement ? document.activeElement.tagName : null,
+            active_text: document.activeElement ? (document.activeElement.innerText || document.activeElement.value || '').slice(0, 50) : null,
+            scroll_y: window.scrollY,
+            html_hash: document.body ? document.body.innerHTML.length : 0 // Cheap proxy for change
+        };
+        """
         try:
-            return self._kernel.browsers.execute_playwright(id=self._sid, code=code)
-        except AttributeError:
-            invoker = getattr(self._kernel.browsers, "playwright", None)
-            if invoker is None:
-                return None
-            return invoker.execute(id=self._sid, code=code)
+            result = self._exec_pw("return " + snippet)
+            return self._extract_value(result) or {}
+        except Exception:
+            return {}
+
+    def _exec_pw(self, code: str) -> Any:
+        """Run a Playwright snippet inside the Kernel browser VM.
+
+        Canonical method per Lightcone+Kernel docs:
+            kernel.browsers.playwright.execute(session_id, code=...)
+        Falls back to older `execute_playwright` for SDK version skew.
+        """
+        pw = getattr(self._kernel.browsers, "playwright", None)
+        if pw is not None:
+            try:
+                return pw.execute(self._sid, code=code)
+            except TypeError:
+                # Some versions take code positionally
+                return pw.execute(self._sid, code)
+        legacy = getattr(self._kernel.browsers, "execute_playwright", None)
+        if legacy is not None:
+            try:
+                return legacy(self._sid, code=code)
+            except TypeError:
+                return legacy(id=self._sid, code=code)
+        return None
 
     def _snap_coords(self, x: int, y: int) -> tuple[int, int]:
         """Return (x, y) snapped to the nearest interactive DOM element.
@@ -150,12 +254,31 @@ class KernelBackend:
         """Pull a JSON-friendly value out of whatever execute_playwright returns."""
         if result is None:
             return None
-        for attr in ("value", "result", "data", "output"):
-            v = getattr(result, attr, None)
-            if v is not None:
-                return v
+        
+        # If it's already a dict/list/etc, return it
         if isinstance(result, (dict, list, str, int, float, bool)):
             return result
+
+        # Try to extract from known attributes
+        for attr in ("result", "value", "data", "output"):
+            v = getattr(result, attr, None)
+            if v is not None:
+                if isinstance(v, str) and (v.strip().startswith("{") or v.strip().startswith("[")):
+                    try:
+                        return json.loads(v)
+                    except Exception:
+                        pass
+                return v
+
+        # Try to convert to dict if it's some other object
+        try:
+            if hasattr(result, "model_dump"):
+                return result.model_dump()
+            if hasattr(result, "dict"):
+                return result.dict()
+        except Exception:
+            pass
+
         # Last resort: try JSON-decoding a string-y representation
         try:
             return json.loads(str(result))
@@ -164,80 +287,45 @@ class KernelBackend:
 
     def click(self, x: int, y: int) -> None:
         sx, sy = self._snap_coords(x, y)
-        self._kernel.browsers.computer.click_mouse(id=self._sid, x=sx, y=sy)
+        self._kernel.browsers.computer.click_mouse(self._sid, sx, sy)
 
     def double_click(self, x: int, y: int) -> None:
         sx, sy = self._snap_coords(x, y)
-        self._kernel.browsers.computer.click_mouse(id=self._sid, x=sx, y=sy, num_clicks=2)
+        self._kernel.browsers.computer.click_mouse(self._sid, sx, sy, num_clicks=2)
 
     def right_click(self, x: int, y: int) -> None:
-        self._kernel.browsers.computer.click_mouse(id=self._sid, x=x, y=y, button="right")
+        self._kernel.browsers.computer.click_mouse(self._sid, x, y, button="right")
 
     def type(self, text: str) -> None:
-        self._kernel.browsers.computer.type_text(id=self._sid, text=text)
+        """Type text, converting newlines to Enter key presses."""
+        if "\n" in text:
+            parts = text.split("\n")
+            for i, part in enumerate(parts):
+                if part:
+                    self._kernel.browsers.computer.type_text(self._sid, part)
+                if i < len(parts) - 1:
+                    self._kernel.browsers.computer.press_key(self._sid, ["Enter"])
+        else:
+            self._kernel.browsers.computer.type_text(self._sid, text)
 
     def hotkey(self, *keys: str) -> None:
-        # Northstar emits a list of key tokens (e.g. ["ctrl","t"]).
-        # Kernel expects ["Ctrl+t"]-style combos.
-        combo = "+".join(k.capitalize() if len(k) > 1 else k for k in keys)
-        self._kernel.browsers.computer.press_key(id=self._sid, keys=[combo])
+        # Northstar emits things like ["Control", "c"] or ["cmd", "l"].
+        # Kernel expects ["Ctrl+c"]-style combos with canonical names.
+        combo = "+".join(_map_key(k) for k in keys)
+        self._kernel.browsers.computer.press_key(self._sid, [combo])
 
     def scroll(self, dx: int, dy: int, x: int, y: int) -> None:
-        # Kernel exposes delta_y; horizontal scroll is uncommon and we drop dx for now.
-        self._kernel.browsers.computer.scroll(id=self._sid, x=x, y=y, delta_y=dy)
+        self._kernel.browsers.computer.scroll(self._sid, x, y, delta_x=dx, delta_y=dy)
 
     def drag(self, x1: int, y1: int, x2: int, y2: int) -> None:
         self._kernel.browsers.computer.drag_mouse(
-            id=self._sid, path=[[x1, y1], [x2, y2]]
+            self._sid, path=[[x1, y1], [x2, y2]]
         )
 
     def navigate(self, url: str) -> None:
         # Computer-controls has no direct goto; use the Playwright bridge.
-        code = f"await page.goto({url!r}); return null;"
-        self.execute_playwright(code)
+        # We use a longer timeout and wait for load.
+        self._exec_pw(f"await page.goto({url!r}, {{waitUntil: 'load', timeout: 30000}}); return null;")
 
     def wait(self, seconds: float) -> None:
         time.sleep(seconds)
-
-    def execute_playwright(self, code: str) -> Any:
-        try:
-            return self._kernel.browsers.execute_playwright(id=self._sid, code=code)
-        except AttributeError:
-            invoker = getattr(self._kernel.browsers, "playwright", None)
-            if invoker is None:
-                raise
-            return invoker.execute(id=self._sid, code=code)
-
-    def execute_js(self, code: str) -> str:
-        js = f"return await page.evaluate(() => {{ {code} }});"
-        result = self.execute_playwright(js)
-        return str(result) if result else ""
-
-    def wait_for_page_load(self, timeout_ms: int = 5000) -> None:
-        code = (
-            f"await page.waitForLoadState('domcontentloaded', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
-            f"await page.waitForLoadState('networkidle', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
-            "return null;"
-        )
-        try:
-            self.execute_playwright(code)
-        except Exception:
-            time.sleep(1)
-
-    def extract_page_text(self, max_chars: int = 4000) -> str:
-        code = (
-            "const items = document.querySelectorAll("
-            "'[data-testid], .result, .listing, article, "
-            ".s-result-item, .srp-results li, .cl-static-search-result, "
-            ".search-result, [data-pid], .product-card');\n"
-            "if (items.length > 0) {\n"
-            "  const data = Array.from(items).slice(0, 20)"
-            ".map(el => el.innerText.trim()).filter(Boolean);\n"
-            "  return JSON.stringify(data);\n"
-            "}\n"
-            f"return document.body.innerText.substring(0, {max_chars});"
-        )
-        try:
-            return self.execute_js(code)
-        except Exception:
-            return ""
