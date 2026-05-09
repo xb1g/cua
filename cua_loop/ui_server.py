@@ -40,15 +40,16 @@ async def update_state(data: dict):
     return {"status": "ok"}
 
 class StartRequest(BaseModel):
-    url: str
     task: str
+    url: str | None = None
 
-def run_agent_sync(url: str, task: str):
+def run_agent_sync(url: str | None, task: str):
     import httpx
     from cua_loop.runner import run_with_retry
     try:
         max_attempts = int(os.getenv("CUA_MAX_ATTEMPTS", "5"))
-        result = run_with_retry(task=task, url=url, max_attempts=max_attempts)
+        clean_url = url.strip() if url else None
+        result = run_with_retry(task=task, url=clean_url or None, max_attempts=max_attempts)
 
         last = result.attempts[-1] if result.attempts else None
         rows = last.verifier.rows_extracted if last else 0
@@ -242,8 +243,8 @@ async def index():
                     </div>
                     
                     <div class="input-group">
-                        <label>Target URL</label>
-                        <input type="text" id="target-url" value="https://news.ycombinator.com" placeholder="https://...">
+                        <label>Target URL <span style="opacity:.6; text-transform:none; letter-spacing:0;">(optional)</span></label>
+                        <input type="text" id="target-url" value="" placeholder="https://… (leave blank to let the agent navigate itself)">
                     </div>
                     
                     <div class="input-group">
@@ -303,21 +304,22 @@ async def index():
             screenshot.onload = () => screenshot.classList.add('loaded');
             
             async function startAgent() {
-                const url = document.getElementById("target-url").value;
-                const task = document.getElementById("target-task").value;
-                
-                if (!url || !task) return alert("URL and Task are required.");
-                
+                const url = document.getElementById("target-url").value.trim();
+                const task = document.getElementById("target-task").value.trim();
+
+                if (!task) return alert("Task is required.");
+
                 btnStart.disabled = true;
                 btnLoader.style.display = "block";
                 btnStart.querySelector('span').innerText = "Starting...";
                 resultBox.style.display = "none";
-                
+
+                const body = url ? { url, task } : { task };
                 try {
                     await fetch("/start", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ url, task })
+                        body: JSON.stringify(body)
                     });
                 } catch(e) {
                     alert("Failed to start: " + e);
