@@ -282,6 +282,18 @@ def dedupe_across_marketplaces(
     return sorted(seen.values(), key=lambda x: x.score, reverse=True)
 
 
+def coerce_marketplace_listing(data: dict[str, Any]) -> MarketplaceListing:
+    """Coerce a raw dict (from CUA extracted data) into a MarketplaceListing."""
+    price = data.get("price")
+    if isinstance(price, str):
+        match = re.search(r"[0-9][0-9,]*(?:\.\d+)?", price)
+        price = float(match.group(0).replace(",", "")) if match else None
+    title = data.get("title")
+    if not title or not isinstance(title, str):
+        title = "(untitled)"
+    return MarketplaceListing(**{**data, "title": title, "price": price, "raw": data})
+
+
 def check_marketplace_action_policy(
     action: Any, model_message: str | None = None
 ) -> PolicyDecision:

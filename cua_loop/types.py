@@ -50,3 +50,4 @@ class RunResult(BaseModel):
     extracted: Any = None
     total_duration_s: float = 0.0
     selected_attempt_index: int | None = None
+    marketplace_scores: Any = None
