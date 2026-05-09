@@ -51,7 +51,7 @@ def _action_to_dict(action: Any) -> dict[str, Any]:
 
 def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None):
     try:
-        httpx.post("http://localhost:8000/update", json={
+        httpx.post("http://localhost:8555/update", json={
             "step": step,
             "task": task,
             "screenshot_url": screenshot_url,
@@ -66,24 +66,29 @@ def _execute_action(computer: Any, action: Any) -> bool:
     Returns True if the loop should terminate.
     """
     t = action.type
+    x = getattr(action, "x", 0)
+    y = getattr(action, "y", 0)
+    
     if t == "click" and getattr(action, "button", "left") == "right":
-        computer.right_click(action.x, action.y)
+        computer.right_click(x, y)
     elif t == "click":
-        computer.click(action.x, action.y)
+        computer.click(x, y)
     elif t == "double_click":
-        computer.double_click(action.x, action.y)
+        computer.double_click(x, y)
     elif t == "type":
-        computer.type(action.text)
+        computer.type(getattr(action, "text", ""))
     elif t in ("key", "keypress"):
-        computer.hotkey(*action.keys)
+        computer.hotkey(*getattr(action, "keys", []))
     elif t == "scroll":
-        computer.scroll(0, action.scroll_y or 0, action.x or 640, action.y or 400)
+        computer.scroll(0, getattr(action, "scroll_y", 0), x or 640, y or 400)
     elif t == "hscroll":
-        computer.scroll(action.scroll_x or 0, 0, action.x or 640, action.y or 400)
+        computer.scroll(getattr(action, "scroll_x", 0), 0, x or 640, y or 400)
     elif t == "drag":
-        computer.drag(action.x, action.y, action.end_x, action.end_y)
+        end_x = getattr(action, "end_x", x)
+        end_y = getattr(action, "end_y", y)
+        computer.drag(x, y, end_x, end_y)
     elif t == "navigate":
-        computer.navigate(action.url)
+        computer.navigate(getattr(action, "url", ""))
     elif t == "wait":
         computer.wait(2)
     elif t in ("terminate", "answer", "done"):
