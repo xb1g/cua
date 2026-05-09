@@ -31,7 +31,7 @@ from cua_loop.marketplace import (
     score_marketplace_listing,
 )
 from cua_loop.runner import run_with_retry
-from cua_loop.scaling import run_wide_scaling
+from cua_loop.scaling import run_marketplace_scaling, run_wide_scaling
 from cua_loop.types import AttemptResult, RunResult, Trajectory, VerifierResult
 from cua_loop.verifier import verify
 
@@ -141,7 +141,12 @@ def _run_with_config(query: dict[str, Any], config: AblationConfig) -> QueryResu
         os.environ["AEGIS_ALLOW_DANGEROUS_ACTIONS"] = "1"
 
     try:
-        if config.use_wide_scaling:
+        if config.use_wide_scaling and config.use_marketplace_scoring:
+            run = run_marketplace_scaling(
+                task=query["query"],
+                width_per_site=1,
+            )
+        elif config.use_wide_scaling:
             run = run_wide_scaling(
                 task=query["query"],
                 url=query.get("url"),

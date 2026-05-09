@@ -1,0 +1,47 @@
+[
+  {
+    "query": "used couch under $200",
+    "marketplace": "craigslist",
+    "category": "furniture",
+    "config": "full-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 5,
+    "duration_s": 82.4,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "All branches stuck; fallback attempted on 5 marketplaces",
+    "error": null
+  },
+  {
+    "query": "iPhone 14 Pro under $500",
+    "marketplace": "mercari",
+    "category": "electronics",
+    "config": "full-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 3,
+    "duration_s": 84.4,
+    "blocked_actions": 7,
+    "marketplace_score": null,
+    "verifier_reason": "Wide-scaling 3 branches, navigation OK, extraction failed",
+    "error": null
+  },
+  {
+    "query": "Fender Stratocaster under $800",
+    "marketplace": "reverb",
+    "category": "instruments",
+    "config": "full-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 3,
+    "duration_s": 22.6,
+    "blocked_actions": 7,
+    "marketplace_score": null,
+    "verifier_reason": "Loop detected, stuck recovery activated",
+    "error": null
+  }
+]

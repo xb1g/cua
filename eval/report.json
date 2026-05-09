@@ -1,0 +1,101 @@
+{
+  "configs": {
+    "full-aegis": {
+      "metrics": {
+        "total_queries": 3,
+        "success_count": 0,
+        "success_rate": 0.0,
+        "avg_rows_extracted": 0.0,
+        "avg_attempts": 3.67,
+        "total_blocked_actions": 14,
+        "avg_duration_s": 63.13,
+        "by_category": {
+          "furniture": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "electronics": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "instruments": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          }
+        },
+        "by_marketplace": {
+          "craigslist": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "mercari": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "reverb": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          }
+        }
+      },
+      "raw_count": 3
+    },
+    "no-aegis": {
+      "metrics": {
+        "total_queries": 3,
+        "success_count": 0,
+        "success_rate": 0.0,
+        "avg_rows_extracted": 0.0,
+        "avg_attempts": 1.0,
+        "total_blocked_actions": 0,
+        "avg_duration_s": 37.5,
+        "by_category": {
+          "furniture": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "electronics": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "instruments": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          }
+        },
+        "by_marketplace": {
+          "craigslist": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "mercari": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "reverb": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          }
+        }
+      },
+      "raw_count": 3
+    }
+  },
+  "headline": {
+    "without_aegis_rate": 0.0,
+    "with_aegis_rate": 0.0,
+    "improvement_pp": 0.0
+  }
+}
