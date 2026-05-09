@@ -3,12 +3,68 @@
     "full-aegis": {
       "metrics": {
         "total_queries": 5,
+        "success_count": 4,
+        "success_rate": 0.8,
+        "avg_rows_extracted": 12.6,
+        "avg_attempts": 5.0,
+        "total_blocked_actions": 2,
+        "avg_duration_s": 205.02,
+        "by_category": {
+          "furniture": {
+            "total": 1,
+            "successes": 1,
+            "success_rate": 1.0
+          },
+          "electronics": {
+            "total": 1,
+            "successes": 0,
+            "success_rate": 0.0
+          },
+          "instruments": {
+            "total": 1,
+            "successes": 1,
+            "success_rate": 1.0
+          },
+          "bikes": {
+            "total": 1,
+            "successes": 1,
+            "success_rate": 1.0
+          },
+          "vintage": {
+            "total": 1,
+            "successes": 1,
+            "success_rate": 1.0
+          }
+        },
+        "by_marketplace": {
+          "craigslist": {
+            "total": 2,
+            "successes": 2,
+            "success_rate": 1.0
+          },
+          "ebay": {
+            "total": 2,
+            "successes": 1,
+            "success_rate": 0.5
+          },
+          "reverb": {
+            "total": 1,
+            "successes": 1,
+            "success_rate": 1.0
+          }
+        }
+      },
+      "raw_count": 5
+    },
+    "no-aegis": {
+      "metrics": {
+        "total_queries": 5,
         "success_count": 0,
         "success_rate": 0.0,
         "avg_rows_extracted": 0.0,
-        "avg_attempts": 5.0,
-        "total_blocked_actions": 21,
-        "avg_duration_s": 165.32,
+        "avg_attempts": 1.0,
+        "total_blocked_actions": 0,
+        "avg_duration_s": 116.63,
         "by_category": {
           "furniture": {
             "total": 1,
@@ -56,15 +112,15 @@
       },
       "raw_count": 5
     },
-    "no-aegis": {
+    "plus_retry": {
       "metrics": {
-        "total_queries": 5,
+        "total_queries": 3,
         "success_count": 0,
         "success_rate": 0.0,
         "avg_rows_extracted": 0.0,
-        "avg_attempts": 1.0,
+        "avg_attempts": 5.0,
         "total_blocked_actions": 0,
-        "avg_duration_s": 51.5,
+        "avg_duration_s": 1370.69,
         "by_category": {
           "furniture": {
             "total": 1,
@@ -72,28 +128,23 @@
             "success_rate": 0.0
           },
           "electronics": {
-            "total": 2,
+            "total": 1,
             "successes": 0,
             "success_rate": 0.0
           },
           "instruments": {
-            "total": 2,
+            "total": 1,
             "successes": 0,
             "success_rate": 0.0
           }
         },
         "by_marketplace": {
           "craigslist": {
-            "total": 2,
-            "successes": 0,
-            "success_rate": 0.0
-          },
-          "ebay": {
             "total": 1,
             "successes": 0,
             "success_rate": 0.0
           },
-          "offerup": {
+          "mercari": {
             "total": 1,
             "successes": 0,
             "success_rate": 0.0
@@ -105,12 +156,12 @@
           }
         }
       },
-      "raw_count": 5
+      "raw_count": 3
     }
   },
   "headline": {
     "without_aegis_rate": 0.0,
-    "with_aegis_rate": 0.0,
-    "improvement_pp": 0.0
+    "with_aegis_rate": 0.8,
+    "improvement_pp": 0.8
   }
 }
