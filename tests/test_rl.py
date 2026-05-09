@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cua_loop.rl import RLPolicy, SearchStrategy, decayed_epsilon, policy_summary, reward_from_attempt, reward_to_beta_success, train_policy
+from cua_loop.rl import RLPolicy, SearchStrategy, decayed_epsilon, normalize_rewards, policy_summary, reward_from_attempt, reward_to_beta_success, train_policy
 from cua_loop.types import AttemptResult, Step, Trajectory, VerifierResult
 
 
@@ -57,6 +57,8 @@ class RLPolicyTest(unittest.TestCase):
         self.assertEqual(decayed_epsilon(2, 3), 0.05)
         self.assertEqual(reward_to_beta_success(10), 1.0)
         self.assertEqual(reward_to_beta_success(-10), 0.0)
+        self.assertEqual(normalize_rewards([0.9, 1.9]), [0.0, 1.0])
+        self.assertEqual(normalize_rewards([1.0, 1.0]), [1.0, 1.0])
 
     def test_train_policy_uses_injected_runner(self):
         strategies = [
