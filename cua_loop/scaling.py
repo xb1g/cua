@@ -17,6 +17,7 @@ from cua_loop.marketplace import (
 from cua_loop.query_parser import parse_query
 from cua_loop.runner import _persist
 from cua_loop.sites import MARKETPLACE_REGISTRY, generate_all_urls
+from cua_loop.url_params import generate_all_filtered_urls
 from cua_loop.types import AttemptResult, RunResult, Trajectory, VerifierResult
 from cua_loop.verifier import verify
 
@@ -130,9 +131,8 @@ def run_marketplace_scaling(
     each marketplace, then runs CUA branches against all of them concurrently.
     """
     parsed = parse_query(task)
-    urls = generate_all_urls(
-        query=parsed.keywords,
-        max_price=parsed.max_price,
+    urls = generate_all_filtered_urls(
+        parsed_query=parsed,
         location=location,
         skip_login_required=skip_login_required,
     )
