@@ -28,6 +28,40 @@ DISPLAY_HEIGHT = int(os.getenv("CUA_DISPLAY_HEIGHT", "720"))
 MAX_STEPS = int(os.getenv("CUA_MAX_STEPS", "40"))
 _MARKETPLACE_MODE = os.getenv("AEGIS_MARKETPLACE_MODE", "true").lower() in {"1", "true", "yes"}
 
+SYSTEM_PROMPT = """\
+You are a precise web scraping agent controlling a browser. Follow these rules strictly.
+
+NAVIGATION:
+- Prefer keyboard shortcuts over mouse clicks whenever possible.
+- Use Ctrl+L to focus the address bar, then type or paste URLs directly.
+- Use Tab to move between interactive elements and Enter to activate them.
+- Use Ctrl+F to find text on the page.
+- Only use mouse clicks when there is no keyboard alternative.
+- Dismiss cookie banners, popups, and overlays by pressing Escape.
+
+CLICKING DISCIPLINE:
+- Before clicking, confirm the target element is fully loaded and visible on screen.
+- If a click produces no visible change, do NOT repeat the same click. Instead try: \
+pressing Enter, using Tab to reach the element, scrolling to reveal it, or using a keyboard shortcut.
+- Never click the same coordinates more than twice. If it fails twice, switch strategy.
+
+PAGE LOADING:
+- After any navigation or click that loads a new page, wait for content to appear before acting.
+- Look for loading spinners, skeleton screens, or partial content as signs the page is not ready.
+- Do not act on a page that is still loading.
+
+DATA EXTRACTION:
+- When you find search results or listing data, extract structured data immediately.
+- For each listing extract: title, price, condition, location, URL, seller name, posted date.
+- Report extracted data as a JSON array in your final answer.
+- Read prices carefully: "$1,200" is twelve hundred, not one hundred twenty.
+
+EFFICIENCY:
+- Never navigate through menus or homepages if you can reach the target via direct URL.
+- Skip ads, promotional banners, and sponsored content.
+- If you are stuck on a page for more than 2 actions, try pressing Escape and then a different approach.\
+"""
+
 TOOLS = [
     {
         "type": "computer_use",
@@ -57,10 +91,13 @@ def _action_to_dict(action: Any) -> dict[str, Any]:
     return {k: getattr(action, k, None) for k in keys if getattr(action, k, None) is not None}
 
 
-def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, **extra: Any) -> None:
+def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, channel: str = "", **extra: Any) -> None:
     try:
+        url = "http://localhost:8555/update"
+        if channel:
+            url += f"?channel={channel}"
         httpx.post(
-            "http://localhost:8555/update",
+            url,
             json={
                 "step": step,
                 "task": task,
@@ -117,12 +154,14 @@ def run_single_attempt(
     url: str | None = None,
     extra_context: str = "",
     kind: str = "browser",
+    channel: str = "",
+    skip_safety: bool = False,
 ) -> Trajectory:
     """One pass of the Northstar CUA loop. No retry. No verification."""
     lightcone = Lightcone(timeout=120.0)  # CUA round-trips can be slow; use generous timeout
     instruction = task
     if url:
-        instruction = f"Go to {url}. Then: {task}"
+        instruction = f"You are already on {url}. {task}"
     if extra_context:
         instruction += f"\n\nAdditional context from prior attempts:\n{extra_context}"
 
@@ -130,11 +169,15 @@ def run_single_attempt(
     backend = make_backend(kind=kind)
 
     with backend as b:
+        if url:
+            b.navigate(url)
+            b.wait(2)
         screenshot_url = b.screenshot_url()
-        _notify_ui(0, instruction, screenshot_url, status="started")
+        _notify_ui(0, instruction, screenshot_url, channel=channel, status="started")
 
         response = lightcone.responses.create(
             model=MODEL,
+            instructions=SYSTEM_PROMPT,
             input=[
                 {
                     "role": "user",
@@ -204,7 +247,7 @@ def run_single_attempt(
                 traj.final_message = getattr(action, "result", None) or getattr(action, "text", None)
                 break
 
-            b.wait(1)
+            b.wait_for_settle()
             after_screenshot_url = b.screenshot_url()
             action_check = verify_action_effect(action.type, screenshot_url, after_screenshot_url)
             step.after_screenshot_url = after_screenshot_url

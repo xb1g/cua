@@ -92,14 +92,50 @@ class KernelBackend:
     def navigate(self, url: str) -> None:
         # Computer-controls has no direct goto; use the Playwright bridge.
         code = f"await page.goto({url!r}); return null;"
-        try:
-            self._kernel.browsers.execute_playwright(id=self._sid, code=code)
-        except AttributeError:
-            # SDK shape differs across versions; fall back to a generic invoker.
-            invoker = getattr(self._kernel.browsers, "playwright", None)
-            if invoker is None:
-                raise
-            invoker.execute(id=self._sid, code=code)
+        self.execute_playwright(code)
 
     def wait(self, seconds: float) -> None:
         time.sleep(seconds)
+
+    def execute_playwright(self, code: str) -> Any:
+        try:
+            return self._kernel.browsers.execute_playwright(id=self._sid, code=code)
+        except AttributeError:
+            invoker = getattr(self._kernel.browsers, "playwright", None)
+            if invoker is None:
+                raise
+            return invoker.execute(id=self._sid, code=code)
+
+    def execute_js(self, code: str) -> str:
+        js = f"return await page.evaluate(() => {{ {code} }});"
+        result = self.execute_playwright(js)
+        return str(result) if result else ""
+
+    def wait_for_page_load(self, timeout_ms: int = 5000) -> None:
+        code = (
+            f"await page.waitForLoadState('domcontentloaded', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
+            f"await page.waitForLoadState('networkidle', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
+            "return null;"
+        )
+        try:
+            self.execute_playwright(code)
+        except Exception:
+            time.sleep(1)
+
+    def extract_page_text(self, max_chars: int = 4000) -> str:
+        code = (
+            "const items = document.querySelectorAll("
+            "'[data-testid], .result, .listing, article, "
+            ".s-result-item, .srp-results li, .cl-static-search-result, "
+            ".search-result, [data-pid], .product-card');\n"
+            "if (items.length > 0) {\n"
+            "  const data = Array.from(items).slice(0, 20)"
+            ".map(el => el.innerText.trim()).filter(Boolean);\n"
+            "  return JSON.stringify(data);\n"
+            "}\n"
+            f"return document.body.innerText.substring(0, {max_chars});"
+        )
+        try:
+            return self.execute_js(code)
+        except Exception:
+            return ""
