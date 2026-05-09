@@ -119,23 +119,49 @@ def save_policy(policy: RLPolicy, path: Path = DEFAULT_POLICY_PATH) -> None:
 
 
 def reward_from_attempt(attempt: AttemptResult) -> float:
+    """Compute the raw continuous reward for one CUA attempt.
+
+    Components:
+    - +1.0 when the trajectory verifier marks the attempt successful.
+    - +0.25 when the extracted output has a valid schema.
+    - +0.05 per extracted row, capped at 10 rows.
+    - -0.1 per step taken over 20 to reward efficient trajectories.
+    - -1.0 per blocked action from AEGIS safety policy.
+    - -0.25 per failed per-step verification check.
+    - +0.5 when the attempt completes in under 15 steps.
+
+    Training normalizes these raw rewards to [0, 1] across the episode batch
+    before updating the bandit policy.
+    """
     verifier = attempt.verifier
+    step_count = len(attempt.trajectory.steps)
     reward = 0.0
     if verifier.success:
         reward += 1.0
     if verifier.schema_valid:
         reward += 0.25
     reward += min(verifier.rows_extracted, 10) * 0.05
+    reward -= max(0, step_count - 20) * 0.1
     reward -= sum(1 for step in attempt.trajectory.steps if step.blocked) * 1.0
     reward -= sum(1 for step in attempt.trajectory.steps if step.verification_passed is False) * 0.25
-    if attempt.trajectory.error:
-        reward -= 0.5
+    if step_count < 15:
+        reward += 0.5
     return round(reward, 3)
 
 
+def normalize_rewards(raw_rewards: list[float]) -> list[float]:
+    if not raw_rewards:
+        return []
+    low = min(raw_rewards)
+    high = max(raw_rewards)
+    if high == low:
+        return [1.0 for _ in raw_rewards]
+    return [round((reward - low) / (high - low), 3) for reward in raw_rewards]
+
+
 def reward_to_beta_success(reward: float) -> float:
-    """Map shaped verifier reward into a [0, 1] Beta update mass."""
-    return max(0.0, min(1.0, (reward + 1.5) / 3.0))
+    """Map a normalized reward into a [0, 1] Beta update mass."""
+    return max(0.0, min(1.0, reward))
 
 
 def decayed_epsilon(episode: int, episodes: int, start: float = 0.3, floor: float = 0.05) -> float:
@@ -215,24 +241,33 @@ def train_policy(
     plot_path: Path = DEFAULT_REWARD_PLOT_PATH,
 ) -> RLPolicy:
     policy = load_policy(policy_path)
+    selection_policy = policy.model_copy(deep=True)
     episodes = max(1, episodes)
-    rewards: list[float] = []
+    episode_results: list[tuple[str, float, AttemptResult]] = []
 
     for episode in range(episodes):
         episode_epsilon = decayed_epsilon(episode, episodes, epsilon, epsilon_min)
-        strategy = policy.choose(strategies, epsilon=episode_epsilon, algorithm=algorithm)
+        strategy = selection_policy.choose(strategies, epsilon=episode_epsilon, algorithm=algorithm)
         console.rule(f"[bold]RL episode {episode + 1}/{episodes}: {strategy.name} ({algorithm}, eps={episode_epsilon:.3f})")
         attempt = runner(task, url, strategy, episode)
-        reward = reward_from_attempt(attempt)
-        rewards.append(reward)
-        policy.update(strategy.name, reward)
+        raw_reward = reward_from_attempt(attempt)
+        selection_policy.update(strategy.name, raw_reward)
+        episode_results.append((strategy.name, raw_reward, attempt))
         console.print(
-            f"reward={reward} success={attempt.verifier.success} "
+            f"raw_reward={raw_reward} success={attempt.verifier.success} "
             f"rows={attempt.verifier.rows_extracted} reason={attempt.verifier.reason!r}"
+        )
+
+    normalized_rewards = normalize_rewards([raw_reward for _, raw_reward, _ in episode_results])
+    for (strategy_name, raw_reward, attempt), reward in zip(episode_results, normalized_rewards):
+        policy.update(strategy_name, reward)
+        console.print(
+            f"normalized_reward={reward} raw_reward={raw_reward} strategy={strategy_name} "
+            f"success={attempt.verifier.success}"
         )
         save_policy(policy, policy_path)
 
-    save_reward_plot(rewards, policy, plot_path)
+    save_reward_plot(normalized_rewards, policy, plot_path)
     return policy
 
 
