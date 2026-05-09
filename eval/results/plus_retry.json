@@ -1,0 +1,47 @@
+[
+  {
+    "query": "used couch under $200",
+    "marketplace": "craigslist",
+    "category": "furniture",
+    "config": "+retry",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 5,
+    "duration_s": 1009.64,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "No output produced - technical failure (previous_response_id not found)",
+    "error": null
+  },
+  {
+    "query": "iPhone 14 Pro under $500",
+    "marketplace": "mercari",
+    "category": "electronics",
+    "config": "+retry",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 5,
+    "duration_s": 2031.99,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "Agent hit MAX_STEPS=20 without extracting any data",
+    "error": null
+  },
+  {
+    "query": "Fender Stratocaster used under $800",
+    "marketplace": "reverb",
+    "category": "instruments",
+    "config": "+retry",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 5,
+    "duration_s": 1070.43,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "Agent only described intent but extracted no actual product data from the page",
+    "error": null
+  }
+]
