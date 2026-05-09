@@ -32,7 +32,15 @@ class BrowserBackend(Protocol):
     def navigate(self, url: str) -> None: ...
     def wait(self, seconds: float) -> None: ...
     def execute_playwright(self, code: str) -> Any: ...
-    def wait_for_settle(self) -> None: ...
+
+    def wait_for_page_load(self, timeout_ms: int = 5000) -> None:
+        self.wait(1)
+
+    def execute_js(self, code: str) -> str:
+        return ""
+
+    def extract_page_text(self, max_chars: int = 4000) -> str:
+        return ""
 
 
 def make_backend(kind: str = "browser") -> BrowserBackend:
