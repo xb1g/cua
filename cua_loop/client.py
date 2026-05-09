@@ -140,7 +140,7 @@ def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, ch
                 "action": _action_to_dict(action) if action else {},
                 **extra,
             },
-            timeout=0.2,
+            timeout=5.0,
         )
     except Exception:
         pass
