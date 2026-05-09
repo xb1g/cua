@@ -35,5 +35,8 @@ aegis-rl = "cua_loop.rl:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.pytest.ini_options]
+markers = ["integration: calls real LLM API (requires ANTHROPIC_API_KEY)"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["cua_loop"]
