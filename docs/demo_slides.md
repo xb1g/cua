@@ -31,17 +31,18 @@ Visual: red bar showing **16% success rate (4/24 tasks)**
 
 ---
 
-## Slide 3: Three Layers
+## Slide 3: Four Layers
 
-**AEGIS: three inference-time layers**
+**AEGIS: four inference-time layers**
 
-| Wide Scaling | Action Verification | Security Guardrails |
-|---|---|---|
-| N parallel KERNEL browsers | Per-step screen-change check | Dangerous action blocker |
-| Best-of-N trajectory selection | On-track classifier | Visual prompt-injection scanner |
-| 6 marketplaces x 4 strategies | Retry with verifier feedback | Human approval flow |
+| Orchestrator | Wide Scaling | Action Verification | Security Guardrails |
+|---|---|---|---|
+| Central swarm coordinator | N parallel KERNEL browsers | Per-step screen-change check | Dangerous action blocker |
+| Strategy assignment per branch | Marketplaces x strategy variants | Mid-loop DOM extraction | Visual prompt-injection scanner |
+| Real-time progress monitoring | Best-of-N trajectory selection | Loop detection + stuck recovery | Human approval flow |
+| CUA → DOM → Fallback cascade | Cross-branch learning | DOM rescue before termination | Scam + replica detection |
 
-> Speaker notes: "Layer 1: we spawn 24 parallel browsers across 6 marketplaces with 4 strategy variants each. Layer 2: after every single action, we verify the screen actually changed. If it didn't, we retry with feedback. Layer 3: we block dangerous actions like messaging sellers or clicking phishing links, and we scan every screenshot for adversarial prompt injection."
+> Speaker notes: "AEGIS has four layers. Layer 1 is the orchestrator — the central brain that coordinates the swarm, assigns different search strategies to each branch, monitors progress in real-time, and cascades from CUA to DOM extraction to fallback scripts per branch. Layer 2 is wide scaling — parallel KERNEL browsers across marketplaces and strategies. Layer 3 is action verification — after every single action, we verify the screen changed, detect if the agent is stuck, and extract DOM data mid-loop. Layer 4 is security — we block dangerous actions, scan for prompt injection, detect scams and replicas, and require human approval for contact actions."
 
 ---
 
