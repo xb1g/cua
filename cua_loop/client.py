@@ -1,17 +1,20 @@
-"""Single-attempt CUA inner loop around Lightcone Northstar.
+"""Single-attempt CUA inner loop.
 
-Returns a Trajectory. Outer retry / verification logic lives in runner.py.
+Northstar drives the brain (via the Lightcone Responses API). The browser
+surface is pluggable: Kernel by default, Lightcone-managed as a fallback.
+Outer retry / verification logic lives in runner.py.
 """
 
 from __future__ import annotations
 
 import os
-import httpx
 from typing import Any
 
+import httpx
 from rich.console import Console
 from tzafon import Lightcone
 
+from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.types import Step, Trajectory
 
 console = Console()
@@ -49,48 +52,54 @@ def _action_to_dict(action: Any) -> dict[str, Any]:
     )
     return {k: getattr(action, k, None) for k in keys if getattr(action, k, None) is not None}
 
-def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None):
+
+def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None) -> None:
     try:
-        httpx.post("http://localhost:8555/update", json={
-            "step": step,
-            "task": task,
-            "screenshot_url": screenshot_url,
-            "action": _action_to_dict(action) if action else {}
-        }, timeout=0.2)
+        httpx.post(
+            "http://localhost:8555/update",
+            json={
+                "step": step,
+                "task": task,
+                "screenshot_url": screenshot_url,
+                "action": _action_to_dict(action) if action else {},
+            },
+            timeout=0.2,
+        )
     except Exception:
         pass
 
-def _execute_action(computer: Any, action: Any) -> bool:
-    """Dispatch a Northstar action onto the Lightcone computer.
+
+def _execute_action(b: BrowserBackend, action: Any) -> bool:
+    """Dispatch a Northstar action onto the browser backend.
 
     Returns True if the loop should terminate.
     """
     t = action.type
-    x = getattr(action, "x", 0)
-    y = getattr(action, "y", 0)
-    
+    x = getattr(action, "x", 0) or 0
+    y = getattr(action, "y", 0) or 0
+
     if t == "click" and getattr(action, "button", "left") == "right":
-        computer.right_click(x, y)
+        b.right_click(x, y)
     elif t == "click":
-        computer.click(x, y)
+        b.click(x, y)
     elif t == "double_click":
-        computer.double_click(x, y)
+        b.double_click(x, y)
     elif t == "type":
-        computer.type(getattr(action, "text", ""))
+        b.type(getattr(action, "text", "") or "")
     elif t in ("key", "keypress"):
-        computer.hotkey(*getattr(action, "keys", []))
+        b.hotkey(*(getattr(action, "keys", []) or []))
     elif t == "scroll":
-        computer.scroll(0, getattr(action, "scroll_y", 0), x or 640, y or 400)
+        b.scroll(0, getattr(action, "scroll_y", 0) or 0, x or 640, y or 400)
     elif t == "hscroll":
-        computer.scroll(getattr(action, "scroll_x", 0), 0, x or 640, y or 400)
+        b.scroll(getattr(action, "scroll_x", 0) or 0, 0, x or 640, y or 400)
     elif t == "drag":
-        end_x = getattr(action, "end_x", x)
-        end_y = getattr(action, "end_y", y)
-        computer.drag(x, y, end_x, end_y)
+        end_x = getattr(action, "end_x", x) or x
+        end_y = getattr(action, "end_y", y) or y
+        b.drag(x, y, end_x, end_y)
     elif t == "navigate":
-        computer.navigate(getattr(action, "url", ""))
+        b.navigate(getattr(action, "url", "") or "")
     elif t == "wait":
-        computer.wait(2)
+        b.wait(2)
     elif t in ("terminate", "answer", "done"):
         return True
     else:
@@ -105,7 +114,7 @@ def run_single_attempt(
     kind: str = "browser",
 ) -> Trajectory:
     """One pass of the Northstar CUA loop. No retry. No verification."""
-    client = Lightcone()
+    lightcone = Lightcone()  # used for the model API only — browser may live elsewhere
     instruction = task
     if url:
         instruction = f"Go to {url}. Then: {task}"
@@ -113,13 +122,13 @@ def run_single_attempt(
         instruction += f"\n\nAdditional context from prior attempts:\n{extra_context}"
 
     traj = Trajectory(task=task, url=url)
+    backend = make_backend(kind=kind)
 
-    with client.computer.create(kind=kind) as computer:
-        screenshot = computer.screenshot()
-        screenshot_url = computer.get_screenshot_url(screenshot)
+    with backend as b:
+        screenshot_url = b.screenshot_url()
         _notify_ui(0, instruction, screenshot_url)
 
-        response = client.responses.create(
+        response = lightcone.responses.create(
             model=MODEL,
             input=[
                 {
@@ -165,16 +174,15 @@ def run_single_attempt(
             console.print(f"[cyan]step {step_idx}[/cyan] {action.type} {_action_to_dict(action)}")
             _notify_ui(step_idx, instruction, screenshot_url, action)
 
-            terminated = _execute_action(computer, action)
+            terminated = _execute_action(b, action)
             if terminated:
                 traj.final_message = getattr(action, "result", None) or getattr(action, "text", None)
                 break
 
-            computer.wait(1)
-            screenshot = computer.screenshot()
-            screenshot_url = computer.get_screenshot_url(screenshot)
+            b.wait(1)
+            screenshot_url = b.screenshot_url()
 
-            response = client.responses.create(
+            response = lightcone.responses.create(
                 model=MODEL,
                 previous_response_id=response.id,
                 input=[
