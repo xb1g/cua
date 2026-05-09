@@ -1,0 +1,234 @@
+{
+  "task": "Find macbooks on ebay",
+  "url": "https://www.ebay.com/sch/i.html?_nkw=macbook",
+  "success": true,
+  "attempts": [
+    {
+      "attempt_index": 0,
+      "trajectory": {
+        "task": "Find macbooks on ebay",
+        "url": "https://www.ebay.com/sch/i.html?_nkw=macbook",
+        "steps": [
+          {
+            "action_type": "type",
+            "action_args": {
+              "text": "laptop"
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "click",
+            "action_args": {
+              "x": 100,
+              "y": 200
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "scroll",
+            "action_args": {
+              "dx": 0,
+              "dy": 500
+            },
+            "verification_passed": true
+          }
+        ],
+        "final_message": "Found 15 listings",
+        "extracted": [
+          {
+            "title": "Product 1 Max",
+            "price": "$1234",
+            "url": "https://example.com/item0",
+            "condition": "used"
+          },
+          {
+            "title": "Product 2 Plus",
+            "price": "$90",
+            "url": "https://example.com/item1",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 3 Pro",
+            "price": "$1600",
+            "url": "https://example.com/item2",
+            "condition": "used"
+          },
+          {
+            "title": "Product 4 Pro",
+            "price": "$1526",
+            "url": "https://example.com/item3",
+            "condition": "new"
+          },
+          {
+            "title": "Product 5 Pro",
+            "price": "$1069",
+            "url": "https://example.com/item4",
+            "condition": "used"
+          },
+          {
+            "title": "Product 6 Air",
+            "price": "$890",
+            "url": "https://example.com/item5",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 7 Pro",
+            "price": "$492",
+            "url": "https://example.com/item6",
+            "condition": "new"
+          },
+          {
+            "title": "Product 8 Air",
+            "price": "$739",
+            "url": "https://example.com/item7",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 9 Pro",
+            "price": "$784",
+            "url": "https://example.com/item8",
+            "condition": "new"
+          },
+          {
+            "title": "Product 10 Pro",
+            "price": "$1440",
+            "url": "https://example.com/item9",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 11 Air",
+            "price": "$1291",
+            "url": "https://example.com/item10",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 12 Max",
+            "price": "$1335",
+            "url": "https://example.com/item11",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 13 Plus",
+            "price": "$443",
+            "url": "https://example.com/item12",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 14 Plus",
+            "price": "$1502",
+            "url": "https://example.com/item13",
+            "condition": "used"
+          },
+          {
+            "title": "Product 15 Max",
+            "price": "$636",
+            "url": "https://example.com/item14",
+            "condition": "used"
+          }
+        ],
+        "error": null
+      },
+      "verifier": {
+        "success": true,
+        "rows_extracted": 15,
+        "schema_valid": true,
+        "reason": "15 listings with title+price"
+      },
+      "duration_s": 53.3973025929583
+    }
+  ],
+  "extracted": [
+    {
+      "title": "Product 1 Max",
+      "price": "$1234",
+      "url": "https://example.com/item0",
+      "condition": "used"
+    },
+    {
+      "title": "Product 2 Plus",
+      "price": "$90",
+      "url": "https://example.com/item1",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 3 Pro",
+      "price": "$1600",
+      "url": "https://example.com/item2",
+      "condition": "used"
+    },
+    {
+      "title": "Product 4 Pro",
+      "price": "$1526",
+      "url": "https://example.com/item3",
+      "condition": "new"
+    },
+    {
+      "title": "Product 5 Pro",
+      "price": "$1069",
+      "url": "https://example.com/item4",
+      "condition": "used"
+    },
+    {
+      "title": "Product 6 Air",
+      "price": "$890",
+      "url": "https://example.com/item5",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 7 Pro",
+      "price": "$492",
+      "url": "https://example.com/item6",
+      "condition": "new"
+    },
+    {
+      "title": "Product 8 Air",
+      "price": "$739",
+      "url": "https://example.com/item7",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 9 Pro",
+      "price": "$784",
+      "url": "https://example.com/item8",
+      "condition": "new"
+    },
+    {
+      "title": "Product 10 Pro",
+      "price": "$1440",
+      "url": "https://example.com/item9",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 11 Air",
+      "price": "$1291",
+      "url": "https://example.com/item10",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 12 Max",
+      "price": "$1335",
+      "url": "https://example.com/item11",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 13 Plus",
+      "price": "$443",
+      "url": "https://example.com/item12",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 14 Plus",
+      "price": "$1502",
+      "url": "https://example.com/item13",
+      "condition": "used"
+    },
+    {
+      "title": "Product 15 Max",
+      "price": "$636",
+      "url": "https://example.com/item14",
+      "condition": "used"
+    }
+  ],
+  "total_duration_s": 73.55034568671951,
+  "selected_attempt_index": 0
+}
