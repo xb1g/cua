@@ -103,6 +103,58 @@ class TestOrchestrate:
         assert result.success
         assert result.total_listings_found >= 2
 
+    def test_max_browsers_limits_branches(self, monkeypatch):
+        listings = [{"title": "Item", "price": 50.0, "marketplace": "cl"}]
+        with (
+            patch("cua_loop.orchestrator.run_single_attempt", side_effect=self._mock_run_single(listings)),
+            patch("cua_loop.orchestrator.verify", self._mock_verify(rows=1)),
+            patch("cua_loop.orchestrator.generate_all_filtered_urls",
+                  return_value={f"site{i}": f"https://site{i}.com" for i in range(10)}),
+        ):
+            result = orchestrate("test", max_browsers=3)
+
+        assert result.total_branches <= 3
+
+    def test_all_fail_returns_failure(self, monkeypatch):
+        with (
+            patch("cua_loop.orchestrator.run_single_attempt", side_effect=Exception("crash")),
+            patch("cua_loop.orchestrator.extract_listings", return_value=[]),
+            patch("cua_loop.orchestrator.run_fallback_extraction", return_value=[]),
+            patch("cua_loop.orchestrator.generate_all_filtered_urls",
+                  return_value={"craigslist": "https://cl.example.com"}),
+            patch("cua_loop.orchestrator.make_backend") as mock_be,
+        ):
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=ctx)
+            ctx.__exit__ = MagicMock(return_value=False)
+            mock_be.return_value = ctx
+
+            result = orchestrate("nonexistent widget", max_browsers=1)
+
+        assert result.success is False
+        assert result.total_listings_found == 0
+
+    def test_cascade_cua_to_dom_to_fallback(self, monkeypatch):
+        fallback_data = [{"title": "Rescued", "price": "$75", "marketplace": "ebay"}]
+        with (
+            patch("cua_loop.orchestrator.run_single_attempt", side_effect=Exception("CUA fail")),
+            patch("cua_loop.orchestrator.extract_listings", return_value=[]),
+            patch("cua_loop.orchestrator.run_fallback_extraction", return_value=fallback_data),
+            patch("cua_loop.orchestrator.generate_all_filtered_urls",
+                  return_value={"ebay": "https://ebay.com/sch"}),
+            patch("cua_loop.orchestrator.make_backend") as mock_be,
+        ):
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=ctx)
+            ctx.__exit__ = MagicMock(return_value=False)
+            mock_be.return_value = ctx
+
+            result = orchestrate("vintage camera", max_browsers=1)
+
+        assert result.success is True
+        assert result.total_listings_found == 1
+        assert any(d.get("mode") == "fallback" for d in result.branch_details)
+
     def test_orchestrate_no_listings_triggers_fallback(self, monkeypatch):
         fallback_listings = [{"title": "Fallback Item", "price": "$50", "marketplace": "craigslist"}]
         with (
