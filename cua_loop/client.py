@@ -111,6 +111,9 @@ def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, ch
         pass
 
 
+_ADDRESS_BAR_Y_THRESHOLD = 55
+
+
 def _execute_action(b: BrowserBackend, action: Any) -> bool:
     """Dispatch a Northstar action onto the browser backend.
 
@@ -120,7 +123,9 @@ def _execute_action(b: BrowserBackend, action: Any) -> bool:
     x = getattr(action, "x", 0) or 0
     y = getattr(action, "y", 0) or 0
 
-    if t == "click" and getattr(action, "button", "left") == "right":
+    if t == "click" and y < _ADDRESS_BAR_Y_THRESHOLD and getattr(action, "button", "left") == "left":
+        b.hotkey("ctrl", "l")
+    elif t == "click" and getattr(action, "button", "left") == "right":
         b.right_click(x, y)
     elif t == "click":
         b.click(x, y)
@@ -171,7 +176,10 @@ def run_single_attempt(
     with backend as b:
         if url:
             b.navigate(url)
-            b.wait(2)
+            if hasattr(b, "wait_for_page_load"):
+                b.wait_for_page_load()
+            else:
+                b.wait(2)
         screenshot_url = b.screenshot_url()
         _notify_ui(0, instruction, screenshot_url, channel=channel, status="started")
 
@@ -219,67 +227,88 @@ def run_single_attempt(
             )
             traj.steps.append(step)
             console.print(f"[cyan]step {step_idx}[/cyan] {action.type} {_action_to_dict(action)}")
-            _notify_ui(step_idx, instruction, screenshot_url, action, status="proposed")
+            _notify_ui(step_idx, instruction, screenshot_url, action, channel=channel, status="proposed")
 
-            policy = check_action_policy(action, message_text)
-            if policy.allowed and _MARKETPLACE_MODE:
-                mp_policy = check_marketplace_action_policy(action, message_text)
-                if not mp_policy.allowed:
-                    policy = mp_policy
-            if not policy.allowed:
-                step.blocked = True
-                step.block_reason = policy.reason
-                traj.error = f"blocked unsafe action: {policy.reason}"
-                _notify_ui(
-                    step_idx,
-                    instruction,
-                    screenshot_url,
-                    action,
-                    status="blocked",
-                    blocked=True,
-                    block_reason=policy.reason,
-                )
-                console.print(f"[red]blocked unsafe action:[/red] {policy.reason}")
-                break
+            if not skip_safety:
+                policy = check_action_policy(action, message_text)
+                if policy.allowed and _MARKETPLACE_MODE:
+                    mp_policy = check_marketplace_action_policy(action, message_text)
+                    if not mp_policy.allowed:
+                        policy = mp_policy
+                if not policy.allowed:
+                    step.blocked = True
+                    step.block_reason = policy.reason
+                    traj.error = f"blocked unsafe action: {policy.reason}"
+                    _notify_ui(
+                        step_idx,
+                        instruction,
+                        screenshot_url,
+                        action,
+                        channel=channel,
+                        status="blocked",
+                        blocked=True,
+                        block_reason=policy.reason,
+                    )
+                    console.print(f"[red]blocked unsafe action:[/red] {policy.reason}")
+                    break
 
             terminated = _execute_action(b, action)
             if terminated:
                 traj.final_message = getattr(action, "result", None) or getattr(action, "text", None)
                 break
 
-            b.wait_for_settle()
+            if hasattr(b, "wait_for_page_load"):
+                b.wait_for_page_load()
+            else:
+                b.wait(1)
             after_screenshot_url = b.screenshot_url()
-            action_check = verify_action_effect(action.type, screenshot_url, after_screenshot_url)
-            step.after_screenshot_url = after_screenshot_url
-            step.verification_passed = action_check.passed
-            step.verification_reason = action_check.reason
-            _notify_ui(
-                step_idx,
-                instruction,
-                after_screenshot_url,
-                action,
-                status="verified" if action_check.passed else "needs_retry",
-                verification_passed=action_check.passed,
-                verification_reason=action_check.reason,
-            )
-            if not action_check.passed:
-                console.print(f"[yellow]action verification failed:[/yellow] {action_check.reason}")
+            if not skip_safety:
+                action_check = verify_action_effect(action.type, screenshot_url, after_screenshot_url)
+                step.after_screenshot_url = after_screenshot_url
+                step.verification_passed = action_check.passed
+                step.verification_reason = action_check.reason
+                _notify_ui(
+                    step_idx,
+                    instruction,
+                    after_screenshot_url,
+                    action,
+                    channel=channel,
+                    status="verified" if action_check.passed else "needs_retry",
+                    verification_passed=action_check.passed,
+                    verification_reason=action_check.reason,
+                )
+                if not action_check.passed:
+                    console.print(f"[yellow]action verification failed:[/yellow] {action_check.reason}")
+            else:
+                step.after_screenshot_url = after_screenshot_url
+                _notify_ui(step_idx, instruction, after_screenshot_url, action, channel=channel, status="running")
             screenshot_url = after_screenshot_url
+
+            call_output_input: list[dict[str, Any]] = [
+                {
+                    "type": "computer_call_output",
+                    "call_id": computer_call.call_id,
+                    "output": {
+                        "type": "input_image",
+                        "image_url": screenshot_url,
+                        "detail": "auto",
+                    },
+                }
+            ]
+            if not skip_safety and not action_check.passed and action.type in ("click", "double_click"):
+                call_output_input.append({
+                    "role": "user",
+                    "content": (
+                        f"Your last {action.type} at ({x},{y}) had no visible effect. "
+                        "Try a different approach: use keyboard navigation (Tab then Enter), "
+                        "scroll to reveal the element, or use a keyboard shortcut instead."
+                    ),
+                })
 
             response = lightcone.responses.create(
                 model=MODEL,
                 previous_response_id=response.id,
-                input=[
-                    {
-                        "type": "computer_call_output",
-                        "call_id": computer_call.call_id,
-                        "output": {
-                            "type": "input_image",
-                            "image_url": screenshot_url,
-                            "detail": "auto",
-                        },
-                    }
-                ],
+                input=call_output_input,
                 tools=TOOLS,
             )
         else:
