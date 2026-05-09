@@ -25,8 +25,29 @@ PROMPT_INJECTION_PATTERNS = (
 )
 
 
+_ZERO_WIDTH = re.compile(r"[​‌‍⁠﻿]")
+
+_HOMOGLYPH_MAP = str.maketrans({
+    "а": "a", "е": "e", "о": "o", "р": "p",
+    "с": "c", "у": "y", "х": "x", "і": "i",
+    "А": "A", "Е": "E", "О": "O", "Р": "P",
+    "С": "C", "У": "Y", "Х": "X", "І": "I",
+    "Α": "A", "Β": "B", "Ε": "E", "Η": "H",
+    "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N",
+    "Ο": "O", "Ρ": "P", "Τ": "T", "Χ": "X",
+    "α": "a", "ο": "o", "ρ": "p",
+})
+
+
+def _normalize_text(text: str) -> str:
+    text = _ZERO_WIDTH.sub("", text)
+    text = text.translate(_HOMOGLYPH_MAP)
+    return text
+
+
 def detect_prompt_injection(*texts: str | None) -> str | None:
-    haystack = "\n".join(t or "" for t in texts).lower()
+    raw = "\n".join(t or "" for t in texts)
+    haystack = _normalize_text(raw).lower()
     for pattern in PROMPT_INJECTION_PATTERNS:
         if re.search(pattern, haystack):
             return f"prompt injection pattern matched: {pattern}"
