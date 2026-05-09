@@ -314,6 +314,7 @@ def run_single_attempt(
     instruction = task
     if url:
         instruction = f"You are already on {url}. {task}"
+    instruction = f"{KEYBOARD_BIAS_PROMPT}\n\n{instruction}"
     if extra_context:
         instruction += f"\n\nAdditional context from prior attempts:\n{extra_context}"
 
