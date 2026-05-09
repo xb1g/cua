@@ -6,7 +6,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from rich.console import Console
+from rich.console import Console  # type: ignore[reportMissingImports]
 
 from cua_loop.client import run_single_attempt
 from cua_loop.cross_branch import build_cross_branch_hint, should_retry_with_hints
@@ -16,6 +16,7 @@ from cua_loop.marketplace import (
     dedupe_across_marketplaces,
     score_marketplace_listing,
 )
+from cua_loop.orchestrator import AgentTask, synthesize_results, understand_intent, decompose_task
 from cua_loop.query_parser import parse_query
 from cua_loop.runner import _persist
 from cua_loop.sites import MARKETPLACE_REGISTRY, generate_all_urls
@@ -84,6 +85,95 @@ def _run_branch(task: str, url: str | None, branch_index: int, extra_hint: str =
         verifier=verifier,
         duration_s=time.time() - started,
     )
+
+
+def _run_agent_task(agent_task: AgentTask, channel: str) -> dict:
+    """Run a specific orchestrated AgentTask and return a compact branch record."""
+    started = time.time()
+    task_description = getattr(agent_task, "task_description")
+    specific_instructions = getattr(agent_task, "specific_instructions", "")
+    try:
+        traj = run_single_attempt(
+            task=task_description,
+            url=None,
+            extra_context=specific_instructions,
+            channel=channel,
+        )
+        success = not bool(traj.error)
+        result_data = traj.model_dump() if hasattr(traj, "model_dump") else traj.dict()
+    except Exception as exc:
+        success = False
+        result_data = {"error": str(exc), "task": task_description}
+
+    return {
+        "agent_id": getattr(agent_task, "agent_id", channel),
+        "role_name": getattr(agent_task, "role_name", "agent"),
+        "result_data": result_data,
+        "success": success,
+        "duration": time.time() - started,
+    }
+
+
+def run_orchestrated_swarm(task: str, agent_tasks: list[AgentTask]) -> RunResult:
+    """Run orchestrator-assigned AgentTasks in parallel and synthesize all results."""
+    started = time.time()
+    agent_results: list[dict] = []
+    width = max(1, len(agent_tasks))
+
+    console.rule(f"[bold]AEGIS orchestrated swarm width={width}")
+    with ThreadPoolExecutor(max_workers=width) as pool:
+        futures = {
+            pool.submit(_run_agent_task, agent_task, f"agent_{i}"): agent_task
+            for i, agent_task in enumerate(agent_tasks)
+        }
+        for future in as_completed(futures):
+            agent_task = futures[future]
+            try:
+                result = future.result()
+            except Exception as exc:
+                result = {
+                    "agent_id": getattr(agent_task, "agent_id", "unknown"),
+                    "role_name": getattr(agent_task, "role_name", "agent"),
+                    "result_data": {"error": str(exc)},
+                    "success": False,
+                    "duration": 0.0,
+                }
+            agent_results.append(result)
+            console.print(
+                f"agent {result['agent_id']} ({result['role_name']}): "
+                f"success={result['success']} duration={result['duration']:.1f}s"
+            )
+
+    failed_tasks = [
+        agent_tasks[i] for i, r in enumerate(agent_results)
+        if not r.get("success") and i < len(agent_tasks)
+    ]
+    retry_results: list[dict] = []
+    if failed_tasks:
+        from cua_loop.orchestrator import retry_failed_agents
+        retry_results = retry_failed_agents(failed_tasks)
+        agent_results.extend(retry_results)
+
+    combined_result = synthesize_results(task, agent_results, retry_results)
+    attempts: list[AttemptResult] = []
+    extracted = {
+        "agent_results": sorted(agent_results, key=lambda r: str(r.get("agent_id", ""))),
+        "combined_result": combined_result,
+    }
+
+    run = RunResult(
+        task=task,
+        url=None,
+        success=any(result.get("success") for result in agent_results),
+        attempts=attempts,
+        extracted=extracted,
+        total_duration_s=time.time() - started,
+        selected_attempt_index=None,
+    )
+    object.__setattr__(run, "combined_result", combined_result)
+    path = _persist(run)
+    console.print(f"orchestrated swarm synthesized {len(agent_results)} results; saved -> {path}")
+    return run
 
 
 def run_wide_scaling(task: str, url: str | None = None, width: int = DEFAULT_WIDTH) -> RunResult:

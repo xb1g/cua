@@ -12,15 +12,18 @@ Mount on the existing FastAPI app:
     app.include_router(demo_router)
 """
 
+import asyncio
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from cua_loop.backends import make_backend
 from cua_loop.security import (
     classify_action,
     detect_pii,
@@ -32,6 +35,42 @@ from cua_loop.security import (
 )
 
 demo_router = APIRouter(prefix="/demo")
+
+_SCENARIO_URLS = {
+    "injection_whiteonwhite": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "injection_role": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "injection_system": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "injection_homoglyph": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "injection_zerowidth": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "domain_evil": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "domain_tld": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "domain_clean": "https://xb1g.github.io/cua/pages/craigslist.html",
+    "domain_open_redirect": "https://xb1g.github.io/cua/pages/craigslist.html",
+    "domain_shortener": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "internal_file": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "internal_metadata": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "xss_script": "https://xb1g.github.io/cua/pages/form.html",
+    "xss_onerror": "https://xb1g.github.io/cua/pages/form.html",
+    "xss_jsuri": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "pii_phone": "https://xb1g.github.io/cua/pages/chat.html",
+    "pii_email": "https://xb1g.github.io/cua/pages/chat.html",
+    "pii_cc": "https://xb1g.github.io/cua/pages/chat.html",
+    "pii_ssn": "https://xb1g.github.io/cua/pages/chat.html",
+    "pii_mfa": "https://xb1g.github.io/cua/pages/chat.html",
+    "pii_api_key": "https://xb1g.github.io/cua/pages/chat.html",
+    "pii_seed": "https://xb1g.github.io/cua/pages/chat.html",
+    "pii_clean": "https://xb1g.github.io/cua/pages/chat.html",
+    "phish_google": "https://xb1g.github.io/cua/pages/google-login.html",
+    "phish_amazon": "https://xb1g.github.io/cua/pages/amazon.html",
+    "phish_real": "https://xb1g.github.io/cua/pages/google-real.html",
+    "clipboard_exfil": "https://xb1g.github.io/cua/pages/bank.html",
+    "approval_spoof": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "oauth_grant": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "extension_install": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "action_purchase": "https://xb1g.github.io/cua/pages/marketplace.html",
+    "action_message": "https://xb1g.github.io/cua/pages/chat.html",
+    "action_clean": "https://xb1g.github.io/cua/pages/marketplace.html",
+}
 
 LISTING_PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -1015,6 +1054,7 @@ LIVE_PAGE = r"""<!DOCTYPE html>
   .addr .lk{margin-right:4px;font-size:8px;}.lk-ok{color:var(--success);}.lk-bad{color:var(--danger);}
   .bpage{height:180px;overflow:hidden;background:#fff;position:relative;transition:box-shadow 0.3s;}
   .bpage iframe{width:100%;height:100%;border:none;}
+  .bpage img{width:100%;height:50%;object-fit:cover;border:none;}
   .bpage-danger{box-shadow:inset 0 0 0 2px var(--danger);}
   .bpage .shield{position:absolute;inset:0;background:rgba(16,185,129,0.18);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:6px;z-index:2;}
   .shield .s-icon{width:40px;height:40px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;font-weight:800;}
@@ -1061,7 +1101,11 @@ LIVE_PAGE = r"""<!DOCTYPE html>
         </div>
         <div class="browser-mock" id="browser-raw">
           <div class="browser-bar"><div class="dots"><span class="d-r"></span><span class="d-y"></span><span class="d-g"></span></div><div class="addr" id="url-raw"><span class="lk lk-ok">&#9679;</span> about:blank</div></div>
-          <div class="bpage" id="page-raw"><iframe id="frame-raw" src="about:blank"></iframe></div>
+          <div class="bpage" id="page-raw">
+            <img id="img-raw-before" src="" alt="Before" style="display:none;width:100%;height:50%;object-fit:cover;">
+            <img id="img-raw-after" src="" alt="After" style="display:none;width:100%;height:50%;object-fit:cover;">
+            <div id="placeholder-raw" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#8a8d91;font-size:12px;">Kernel browser will load here</div>
+          </div>
         </div>
         <div class="empty" id="empty-raw">Select an attack scenario from the left to see what happens without protection.</div>
         <div class="step-log" id="log-raw" style="display:none;"></div>
@@ -1073,7 +1117,12 @@ LIVE_PAGE = r"""<!DOCTYPE html>
         </div>
         <div class="browser-mock" id="browser-aegis">
           <div class="browser-bar"><div class="dots"><span class="d-r"></span><span class="d-y"></span><span class="d-g"></span></div><div class="addr" id="url-aegis"><span class="lk lk-ok">&#9679;</span> about:blank</div></div>
-          <div class="bpage" id="page-aegis"><iframe id="frame-aegis" src="about:blank"></iframe><div class="shield" id="shield"><div class="s-icon">S</div><div class="s-title">BLOCKED BY AEGIS</div><div class="s-reason" id="shield-reason"></div></div></div>
+          <div class="bpage" id="page-aegis">
+            <img id="img-aegis-before" src="" alt="Before" style="display:none;width:100%;height:50%;object-fit:cover;">
+            <img id="img-aegis-after" src="" alt="After" style="display:none;width:100%;height:50%;object-fit:cover;">
+            <div id="placeholder-aegis" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#8a8d91;font-size:12px;">Kernel browser will load here</div>
+            <div class="shield" id="shield"><div class="s-icon">S</div><div class="s-title">BLOCKED BY AEGIS</div><div class="s-reason" id="shield-reason"></div></div>
+          </div>
         </div>
         <div class="empty" id="empty-aegis">Select an attack scenario from the left to see AEGIS block it in real time.</div>
         <div class="step-log" id="log-aegis" style="display:none;"></div>
@@ -1082,7 +1131,7 @@ LIVE_PAGE = r"""<!DOCTYPE html>
   </div>
 </div>
 
-<div class="footer">Every verdict is produced by the real AEGIS security engine — no simulations.</div>
+<div class="footer">Every verdict is produced by the real AEGIS security engine running in a real Kernel cloud browser.</div>
 
 <script id="scenario-data" type="application/json">SCENARIO_JSON_PLACEHOLDER</script>
 <script>
@@ -1143,6 +1192,14 @@ function selectAttack(i) {
   emptyAegis.style.display = 'flex';
   emptyRaw.textContent = 'Click "Run Attack" to simulate ' + scenarios[i].name + ' without protection.';
   emptyAegis.textContent = 'Click "Run Attack" to see AEGIS handle ' + scenarios[i].name + '.';
+
+  // Reset screenshot images
+  document.getElementById('img-raw-before').style.display = 'none';
+  document.getElementById('img-raw-after').style.display = 'none';
+  document.getElementById('img-aegis-before').style.display = 'none';
+  document.getElementById('img-aegis-after').style.display = 'none';
+  document.getElementById('placeholder-raw').style.display = 'flex';
+  document.getElementById('placeholder-aegis').style.display = 'flex';
   badgeRaw.textContent = 'READY';
   badgeRaw.className = 'panel-badge badge-idle';
   badgeAegis.textContent = 'READY';
@@ -1413,91 +1470,129 @@ async function runSelected() {
   emptyRaw.style.display = 'none';
   emptyAegis.style.display = 'none';
 
-  // Mark sidebar item
   const item = document.getElementById('item-' + selectedIdx);
 
   // Start both sides
-  badgeRaw.textContent = 'RUNNING';
+  badgeRaw.textContent = 'LOADING KERNEL...';
   badgeRaw.className = 'panel-badge badge-running';
-  badgeAegis.textContent = 'SCANNING';
+  badgeAegis.textContent = 'LOADING KERNEL...';
   badgeAegis.className = 'panel-badge badge-running';
 
-  // AEGIS side: call real classifier
-  const classifierPromise = fetch('/demo/test', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ action: s.action })
-  }).then(r => r.json());
+  // Hide placeholders, show loading
+  document.getElementById('placeholder-raw').style.display = 'none';
+  document.getElementById('placeholder-aegis').style.display = 'none';
 
-  // AEGIS side step 1: receiving action
-  addStep(logAegis, 'step-action', 'Intercepted', 'AEGIS intercepting action: <code>' + s.action.type + '</code>');
+  addStep(logRaw, 'step-info', 'Kernel', 'Spinning up real Kernel cloud browser...');
+  addStep(logAegis, 'step-info', 'Kernel', 'Spinning up real Kernel cloud browser with AEGIS...');
 
-  // Raw side: play scripted steps
-  const rawSteps = RAW_SCRIPTS[s.id] || [{d:500,c:'step-action',l:'Step 1',t:'Agent executing action...'},{d:500,c:'step-danger',l:'Result',t:'Action executed without safety checks'}];
-  const bi = BI[s.id];
-  let dangerHit = false;
+  try {
+    // Run both in parallel
+    const [rawResult, aegisResult] = await Promise.all([
+      fetch('/demo/live-kernel', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ scenario_id: s.id, mode: 'raw' })
+      }).then(r => r.json()),
+      fetch('/demo/live-kernel', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ scenario_id: s.id, mode: 'aegis' })
+      }).then(r => r.json())
+    ]);
 
-  for (const step of rawSteps) {
-    await wait(step.d);
-    addStep(logRaw, step.c, step.l, step.t);
-    if (!dangerHit && step.c === 'step-danger' && bi && bi.cu) {
-      dangerHit = true;
-      setBrowser('raw', bi.cu, bi.cp, true);
+    // --- RAW SIDE ---
+    if (rawResult.success) {
+      // Display screenshots
+      if (rawResult.screenshots && rawResult.screenshots.length >= 1) {
+        const beforeImg = document.getElementById('img-raw-before');
+        beforeImg.src = rawResult.screenshots[0].url;
+        beforeImg.style.display = 'block';
+      }
+      if (rawResult.screenshots && rawResult.screenshots.length >= 2) {
+        const afterImg = document.getElementById('img-raw-after');
+        afterImg.src = rawResult.screenshots[1].url;
+        afterImg.style.display = 'block';
+      }
+
+      // Show logs
+      if (rawResult.logs) {
+        for (const log of rawResult.logs) {
+          addStep(logRaw, 'step-action', 'Kernel', log);
+        }
+      }
+
+      addStep(logRaw, 'step-danger', 'Result', '<strong>UNPROTECTED</strong> — Action executed without AEGIS. Real Kernel browser screenshot above shows the result.');
+      badgeRaw.textContent = 'COMPROMISED';
+      badgeRaw.className = 'panel-badge badge-compromised';
+
+      // Update URL bar
+      const bi = BI[s.id];
+      if (bi) {
+        setBrowser('raw', bi.cu || bi.u, bi.cp || bi.p, true);
+      }
+    } else {
+      addStep(logRaw, 'step-danger', 'Error', 'Kernel browser failed: ' + (rawResult.error || 'Unknown error'));
+      badgeRaw.textContent = 'ERROR';
+      badgeRaw.className = 'panel-badge badge-compromised';
     }
-  }
 
-  // Get AEGIS result
-  const data = await classifierPromise;
-  const v = data.verdict;
+    // --- AEGIS SIDE ---
+    if (aegisResult.success) {
+      // Display screenshots
+      if (aegisResult.screenshots && aegisResult.screenshots.length >= 1) {
+        const beforeImg = document.getElementById('img-aegis-before');
+        beforeImg.src = aegisResult.screenshots[0].url;
+        beforeImg.style.display = 'block';
+      }
+      if (aegisResult.screenshots && aegisResult.screenshots.length >= 2) {
+        const afterImg = document.getElementById('img-aegis-after');
+        afterImg.src = aegisResult.screenshots[1].url;
+        afterImg.style.display = 'block';
+      }
 
-  await wait(300);
-  addStep(logAegis, 'step-info', 'Analyzing', 'Running security classifiers: injection, domain, XSS, PII, phishing, clipboard...');
+      // Show logs
+      if (aegisResult.logs) {
+        for (const log of aegisResult.logs) {
+          const isBlock = log.includes('BLOCKED') || log.includes('block');
+          addStep(logAegis, isBlock ? 'step-block' : 'step-info', 'Kernel', log);
+        }
+      }
 
-  await wait(500);
-
-  if (data.sequence) {
-    for (const sr of data.sequence) {
-      await wait(250);
-      const cls = sr.verdict === 'block' ? 'step-block' : sr.verdict === 'approve' ? 'step-warn' : 'step-info';
-      addStep(logAegis, cls, sr.verdict.toUpperCase(), sr.reason);
+      const v = aegisResult.verdict;
+      if (v === 'block') {
+        addStep(logAegis, 'step-block', 'Blocked', '<strong>' + (aegisResult.category || 'security').toUpperCase() + '</strong>: ' + aegisResult.reason);
+        addStep(logAegis, 'step-block', 'Protected', 'Action was blocked before execution. User and data are safe.');
+        badgeAegis.textContent = 'BLOCKED';
+        badgeAegis.className = 'panel-badge badge-blocked';
+        item.classList.add('done');
+        document.getElementById('shield').style.display = 'flex';
+        document.getElementById('shield-reason').textContent = aegisResult.reason;
+      } else if (v === 'approve') {
+        addStep(logAegis, 'step-warn', 'Approval Required', '<strong>' + (aegisResult.category || '').toUpperCase() + '</strong>: ' + aegisResult.reason);
+        addStep(logAegis, 'step-warn', 'Waiting', 'Action paused — requires human approval before proceeding.');
+        badgeAegis.textContent = 'NEEDS APPROVAL';
+        badgeAegis.className = 'panel-badge badge-approved';
+        item.classList.add('done');
+      } else {
+        addStep(logAegis, 'step-info', 'Scanned', 'All classifiers passed: ' + aegisResult.reason);
+        addStep(logAegis, 'step-block', 'Allowed', 'Action is safe — proceeding normally.');
+        badgeAegis.textContent = 'ALLOWED';
+        badgeAegis.className = 'panel-badge badge-blocked';
+        item.classList.add('safe');
+      }
+    } else {
+      addStep(logAegis, 'step-danger', 'Error', 'Kernel browser failed: ' + (aegisResult.error || 'Unknown error'));
+      badgeAegis.textContent = 'ERROR';
+      badgeAegis.className = 'panel-badge badge-compromised';
     }
-  }
 
-  await wait(400);
-
-  if (v === 'block') {
-    addStep(logAegis, 'step-block', 'Blocked', '<strong>' + (data.category || 'security').toUpperCase() + '</strong>: ' + data.reason);
-    await wait(200);
-    addStep(logAegis, 'step-block', 'Protected', 'Action was blocked before execution. User and data are safe.');
-    badgeAegis.textContent = 'BLOCKED';
-    badgeAegis.className = 'panel-badge badge-blocked';
-    item.classList.add('done');
-    document.getElementById('shield').style.display = 'flex';
-    document.getElementById('shield-reason').textContent = data.reason;
-  } else if (v === 'approve') {
-    addStep(logAegis, 'step-warn', 'Approval Required', '<strong>' + (data.category || '').toUpperCase() + '</strong>: ' + data.reason);
-    await wait(200);
-    addStep(logAegis, 'step-warn', 'Waiting', 'Action paused — requires human approval before proceeding.');
-    badgeAegis.textContent = 'NEEDS APPROVAL';
-    badgeAegis.className = 'panel-badge badge-approved';
-    item.classList.add('done');
-  } else {
-    addStep(logAegis, 'step-info', 'Scanned', 'All classifiers passed: ' + data.reason);
-    await wait(200);
-    addStep(logAegis, 'step-block', 'Allowed', 'Action is safe — proceeding normally.');
-    badgeAegis.textContent = 'ALLOWED';
-    badgeAegis.className = 'panel-badge badge-blocked';
-    item.classList.add('safe');
-  }
-
-  // Raw side final badge
-  const lastRaw = rawSteps[rawSteps.length - 1];
-  if (lastRaw.c === 'step-danger') {
-    badgeRaw.textContent = 'COMPROMISED';
+  } catch (e) {
+    addStep(logRaw, 'step-danger', 'Error', 'Failed to run kernel test: ' + e.message);
+    addStep(logAegis, 'step-danger', 'Error', 'Failed to run kernel test: ' + e.message);
+    badgeRaw.textContent = 'ERROR';
     badgeRaw.className = 'panel-badge badge-compromised';
-  } else {
-    badgeRaw.textContent = 'OK';
-    badgeRaw.className = 'panel-badge badge-idle';
+    badgeAegis.textContent = 'ERROR';
+    badgeAegis.className = 'panel-badge badge-compromised';
   }
 
   btn.disabled = false;
@@ -1506,6 +1601,147 @@ async function runSelected() {
 
 </body>
 </html>"""
+
+
+def _execute_action_on_backend(backend, action_data):
+    action_type = action_data.get("type")
+    if action_type == "type":
+        backend.type(action_data.get("text", ""))
+    elif action_type == "navigate":
+        backend.navigate(action_data.get("url", ""))
+    elif action_type == "keypress":
+        keys = action_data.get("keys", [])
+        if keys:
+            backend.hotkey(*keys)
+    elif action_type == "scroll":
+        backend.scroll(0, action_data.get("scroll_y", 0), 640, 360)
+    elif action_type == "click":
+        x = action_data.get("x", 640)
+        y = action_data.get("y", 360)
+        backend.click(x, y)
+    backend.wait(1)
+
+
+def _run_kernel_scenario(scenario_id: str, mode: str) -> dict:
+    scenario = next((s for s in ATTACK_SCENARIOS if s["id"] == scenario_id), None)
+    if not scenario:
+        return {"error": f"Unknown scenario: {scenario_id}"}
+
+    logs = []
+    screenshots = []
+    verdict = "unprotected"
+    reason = "No security checks applied"
+    category = ""
+
+    try:
+        backend = make_backend()
+        with backend as b:
+            start_url = _SCENARIO_URLS.get(scenario_id, "http://localhost:8555/demo/pages/marketplace")
+            b.navigate(start_url)
+            b.wait_for_page_load()
+            b.wait(1)
+
+            before_ss = b.screenshot_url()
+            screenshots.append({"label": "before", "url": before_ss})
+            logs.append(f"Navigated to {start_url}")
+
+            action_data = scenario["action"]
+
+            if mode == "aegis":
+                if action_data.get("type") == "sequence":
+                    tracker = ClipboardTracker()
+                    seq_results = []
+                    for step in action_data.get("steps", []):
+                        fa = _FakeAction(**{k: v for k, v in step.items() if k != "context_url"})
+                        ctx_url = step.get("context_url")
+                        clipboard_v = tracker.record(fa, current_url=ctx_url)
+                        sv = classify_action(fa)
+                        if clipboard_v:
+                            sv = clipboard_v
+                        seq_results.append({
+                            "step": step,
+                            "verdict": sv.verdict,
+                            "reason": sv.reason,
+                            "category": sv.category,
+                        })
+                        if sv.verdict == "block":
+                            logs.append(f"BLOCKED at step: {sv.reason}")
+                            break
+                    final = next((r for r in seq_results if r["verdict"] == "block"), seq_results[-1] if seq_results else None)
+                    if final:
+                        verdict = final["verdict"]
+                        reason = final["reason"]
+                        category = final["category"]
+                    else:
+                        verdict = "allow"
+                        reason = ""
+                        category = ""
+                else:
+                    fa = _FakeAction(**action_data)
+                    sv = classify_action(fa)
+                    verdict = sv.verdict
+                    reason = sv.reason
+                    category = sv.category
+
+                logs.append(f"AEGIS verdict: {verdict} - {reason}")
+
+                if verdict == "allow":
+                    if action_data.get("type") == "sequence":
+                        for step in action_data.get("steps", []):
+                            _execute_action_on_backend(b, step)
+                    else:
+                        _execute_action_on_backend(b, action_data)
+                    logs.append("Action executed (AEGIS allowed)")
+                elif verdict == "approve":
+                    logs.append("Action requires human approval (not executing)")
+                else:
+                    logs.append(f"Action blocked: {reason}")
+            else:
+                if action_data.get("type") == "sequence":
+                    for step in action_data.get("steps", []):
+                        _execute_action_on_backend(b, step)
+                        logs.append(f"Executed: {step.get('type')}")
+                else:
+                    _execute_action_on_backend(b, action_data)
+                    logs.append(f"Executed: {action_data.get('type')}")
+
+            b.wait(1)
+            after_ss = b.screenshot_url()
+            screenshots.append({"label": "after", "url": after_ss})
+
+            return {
+                "scenario_id": scenario_id,
+                "mode": mode,
+                "screenshots": screenshots,
+                "verdict": verdict if mode == "aegis" else "unprotected",
+                "reason": reason if mode == "aegis" else "No security checks applied",
+                "category": category if mode == "aegis" else "",
+                "logs": logs,
+                "success": True,
+            }
+    except Exception as e:
+        return {
+            "scenario_id": scenario_id,
+            "mode": mode,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "screenshots": screenshots,
+            "logs": logs,
+            "success": False,
+        }
+
+
+@demo_router.post("/live-kernel")
+async def live_kernel_run(data: dict):
+    scenario_id = data.get("scenario_id")
+    mode = data.get("mode", "aegis")
+
+    if not scenario_id:
+        return JSONResponse({"error": "scenario_id is required"}, status_code=400)
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _run_kernel_scenario, scenario_id, mode)
+    return JSONResponse(result)
 
 
 @demo_router.get("/live", response_class=HTMLResponse)

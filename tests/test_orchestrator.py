@@ -9,12 +9,20 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from cua_loop.orchestrator import (
+    AgentTask,
+    IntentAnalysis,
     SEARCH_STRATEGIES,
+    SynthesisResult,
+    SwarmResult,
     OrchestratorResult,
     _SharedState,
     _assign_strategies,
+    decompose_task,
     orchestrate,
+    run_swarm_orchestration,
+    understand_intent,
 )
+import cua_loop.orchestrator as orchestrator_module
 
 
 class TestSharedState:
@@ -102,6 +110,142 @@ class TestOrchestrate:
         assert isinstance(result, OrchestratorResult)
         assert result.success
         assert result.total_listings_found >= 2
+
+
+class TestSwarmOrchestration:
+    def test_understand_intent_parses_llm_response(self, monkeypatch):
+        def fake_chat_json(system, user, *, temperature=0.2, max_tokens=1024):
+            assert "Analyze the user's task" in system
+            assert "research AI companies" in user
+            return {
+                "true_goal": "Compare major AI companies",
+                "desired_output_format": "Markdown comparison matrix",
+                "success_criteria": ["covers products", "covers pricing"],
+                "key_entities": ["OpenAI", "Anthropic", "Google DeepMind"],
+                "suggested_num_agents": 4,
+            }
+
+        monkeypatch.setattr(orchestrator_module, "_chat_json", fake_chat_json)
+
+        intent = understand_intent("research AI companies")
+
+        assert intent.true_goal == "Compare major AI companies"
+        assert intent.desired_output_format == "Markdown comparison matrix"
+        assert intent.success_criteria == ["covers products", "covers pricing"]
+        assert intent.key_entities == ["OpenAI", "Anthropic", "Google DeepMind"]
+        assert intent.suggested_num_agents == 4
+
+    def test_decompose_task_creates_complementary_agent_tasks(self, monkeypatch):
+        intent = IntentAnalysis(
+            true_goal="Compare major AI companies",
+            desired_output_format="Markdown comparison matrix",
+            success_criteria=["covers products", "covers pricing"],
+            key_entities=["OpenAI", "Anthropic", "Google DeepMind"],
+            suggested_num_agents=4,
+        )
+
+        def fake_chat_json(system, user, *, temperature=0.2, max_tokens=1024):
+            assert "genuinely DIFFERENT" in system
+            assert '"num_agents": 3' in user
+            return {
+                "tasks": [
+                    {
+                        "agent_id": 1,
+                        "role_name": "OpenAI researcher",
+                        "task_description": "Research OpenAI products and pricing",
+                        "specific_instructions": "Focus on ChatGPT, API models, and enterprise tiers.",
+                        "expected_output": "OpenAI product/pricing summary",
+                        "dependencies": [],
+                    },
+                    {
+                        "agent_id": 2,
+                        "role_name": "Anthropic researcher",
+                        "task_description": "Research Anthropic products and pricing",
+                        "specific_instructions": "Focus on Claude plans, API pricing, and enterprise options.",
+                        "expected_output": "Anthropic product/pricing summary",
+                        "dependencies": [],
+                    },
+                    {
+                        "agent_id": 3,
+                        "role_name": "Google researcher",
+                        "task_description": "Research Google DeepMind products and pricing",
+                        "specific_instructions": "Focus on Gemini products, AI Studio, and Vertex AI.",
+                        "expected_output": "Google product/pricing summary",
+                        "dependencies": [],
+                    },
+                ]
+            }
+
+        monkeypatch.setattr(orchestrator_module, "_chat_json", fake_chat_json)
+
+        tasks = decompose_task(intent, 3)
+
+        assert [task.agent_id for task in tasks] == [1, 2, 3]
+        assert len({task.task_description for task in tasks}) == 3
+        assert tasks[0].role_name == "OpenAI researcher"
+        assert tasks[1].dependencies == []
+
+    def test_run_swarm_orchestration_combines_distinct_agent_work(self, monkeypatch):
+        intent = IntentAnalysis(
+            true_goal="Compare major AI companies",
+            desired_output_format="Markdown comparison matrix",
+            success_criteria=["covers products", "covers pricing"],
+            key_entities=["OpenAI", "Anthropic"],
+            suggested_num_agents=2,
+        )
+        tasks = [
+            AgentTask(
+                agent_id=1,
+                role_name="OpenAI researcher",
+                task_description="Research OpenAI products and pricing",
+                specific_instructions="Find product lines and current pricing.",
+                expected_output="OpenAI summary",
+            ),
+            AgentTask(
+                agent_id=2,
+                role_name="Anthropic researcher",
+                task_description="Research Anthropic products and pricing",
+                specific_instructions="Find Claude plans and API pricing.",
+                expected_output="Anthropic summary",
+            ),
+        ]
+        synthesis = SynthesisResult(
+            final_report="## Competitive comparison\nOpenAI and Anthropic compared.",
+            key_findings=["Both offer API and chat products"],
+            confidence_score=0.8,
+            gaps_or_uncertainties=["Pricing changes frequently"],
+        )
+
+        def fake_run_single_attempt(task, url=None, extra_context="", channel="", **kwargs):
+            from cua_loop.types import Trajectory
+
+            traj = Trajectory(task=task, url=url)
+            traj.final_message = f"Completed: {task}"
+            traj.extracted = {"summary": task}
+            return traj
+
+        monkeypatch.setattr(orchestrator_module, "understand_intent", lambda task: intent)
+        monkeypatch.setattr(orchestrator_module, "decompose_task", lambda passed_intent, num_agents: tasks)
+        monkeypatch.setattr(orchestrator_module, "run_single_attempt", fake_run_single_attempt)
+
+        def fake_synthesize(agent_tasks, results, passed_intent):
+            assert [task.task_description for task in agent_tasks] == [
+                "Research OpenAI products and pricing",
+                "Research Anthropic products and pricing",
+            ]
+            assert [result["agent_id"] for result in results] == [1, 2]
+            assert all(result["success"] for result in results)
+            return synthesis
+
+        monkeypatch.setattr(orchestrator_module, "synthesize_results", fake_synthesize)
+
+        result = run_swarm_orchestration("research AI companies", num_agents=2)
+
+        assert isinstance(result, SwarmResult)
+        assert result.success is True
+        assert result.intent == intent
+        assert result.agent_tasks == tasks
+        assert result.synthesis == synthesis
 
     def test_max_browsers_limits_branches(self, monkeypatch):
         listings = [{"title": "Item", "price": 50.0, "marketplace": "cl"}]

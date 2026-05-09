@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-from rich.console import Console
+from rich.console import Console  # type: ignore[reportMissingImports]
 
 from cua_loop.backends import make_backend
 from cua_loop.client import run_single_attempt
@@ -88,6 +88,125 @@ class OrchestratorResult(BaseModel):
     branch_details: list[dict[str, Any]] = Field(default_factory=list)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class AgentTask(BaseModel):
+    agent_id: str
+    role_name: str
+    task_description: str
+    specific_instructions: str = ""
+
+
+def understand_intent(task: str) -> dict[str, Any]:
+    """Extract a lightweight intent summary for orchestrated swarm planning."""
+    return {"task": task, "intent": task.strip()}
+
+
+def decompose_task(task: str) -> list[AgentTask]:
+    """Create a default single-agent decomposition for callers without a planner."""
+    return [
+        AgentTask(
+            agent_id="agent_0",
+            role_name="generalist",
+            task_description=task,
+            specific_instructions="Complete the task end-to-end and report concrete findings.",
+        )
+    ]
+
+
+def synthesize_results(task: str, agent_results: list[dict[str, Any]], retries: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Combine orchestrated agent branch outputs into a single synthesis payload.
+
+    Handles failed agents by:
+    - Recording which agents failed and why
+    - Including retry outcomes if retries were attempted
+    - Producing a degraded but honest synthesis when partial failures occur
+    """
+    successful = [r for r in agent_results if r.get("success")]
+    failed = [r for r in agent_results if not r.get("success")]
+
+    agent_statuses = {}
+    for r in agent_results:
+        aid = r.get("agent_id", "unknown")
+        agent_statuses[aid] = {
+            "role_name": r.get("role_name", "agent"),
+            "success": r.get("success", False),
+            "error": r.get("result_data", {}).get("error", "") if isinstance(r.get("result_data"), dict) else "",
+            "duration": r.get("duration", 0.0),
+        }
+
+    total = len(agent_results)
+    ok_count = len(successful)
+    fail_count = len(failed)
+    health_ratio = ok_count / total if total > 0 else 0.0
+
+    retry_info = None
+    if retries:
+        retry_successful = [r for r in retries if r.get("success")]
+        retry_info = {
+            "retried_agents": len(retries),
+            "retry_recovered": len(retry_successful),
+            "retry_failed": len(retries) - len(retry_successful),
+        }
+        for r in retries:
+            aid = r.get("agent_id", "unknown")
+            if aid in agent_statuses:
+                agent_statuses[aid]["retry_success"] = r.get("success", False)
+                agent_statuses[aid]["retry_error"] = r.get("result_data", {}).get("error", "") if isinstance(r.get("result_data"), dict) else ""
+    
+    return {
+        "task": task,
+        "success": ok_count > 0,
+        "total_agents": total,
+        "successful_agents": ok_count,
+        "failed_agents": fail_count,
+        "health_ratio": round(health_ratio, 2),
+        "results": agent_results,
+        "agent_statuses": agent_statuses,
+        "retry_info": retry_info,
+        "partial_synthesis_ok": health_ratio >= 0.5,
+    }
+
+
+def retry_failed_agents(failed_tasks: list[AgentTask]) -> list[dict[str, Any]]:
+    """Retry failed agents with simplified, more focused instructions.
+    
+    Each retried agent gets a shorter task scoped to a single sub-goal,
+    plus a brief hint from the original failure reason if available.
+    """
+    if not failed_tasks:
+        return []
+    
+    console.rule(f"[yellow]Retrying {len(failed_tasks)} failed agent(s)[/yellow]")
+    retry_results: list[dict[str, Any]] = []
+    
+    for task in failed_tasks:
+        simplified_task = f"Retry: {task.task_description}\nFocus on ONE concrete fact or comparison point. Keep output short."
+        try:
+            from cua_loop.scaling import _run_agent_task
+            result = _run_agent_task(
+                AgentTask(
+                    agent_id=task.agent_id,
+                    role_name=f"{task.role_name} (retry)",
+                    task_description=simplified_task,
+                    specific_instructions="Focus on a single concrete fact. Short output preferred.",
+                ),
+                channel=f"agent_{task.agent_id}_retry",
+            )
+            retry_results.append(result)
+            status = "[green]recovered[/green]" if result.get("success") else "[red]still failed[/red]"
+            console.print(f"  Retry {task.agent_id}: {status}")
+        except Exception as exc:
+            retry_results.append({
+                "agent_id": task.agent_id,
+                "role_name": f"{task.role_name} (retry)",
+                "result_data": {"error": str(exc)},
+                "success": False,
+                "duration": 0.0,
+            })
+            console.print(f"  Retry {task.agent_id}: [red]crash — {exc}[/red]")
+    
+    return retry_results
 
 
 class _SharedState:
@@ -333,7 +452,7 @@ def orchestrate(
 
 def main() -> None:
     import argparse
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # type: ignore[reportMissingImports]
     load_dotenv()
 
     parser = argparse.ArgumentParser(description="AEGIS marketplace orchestrator")
