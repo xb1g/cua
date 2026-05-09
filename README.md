@@ -5,6 +5,8 @@
 
 Reliability and safety infrastructure for computer-use agents, demonstrated through a multi-marketplace bargain hunter.
 
+**Model-agnostic** — works with Northstar, Kimi K2.6 Turbo (via Fireworks), or any OpenAI-compatible CUA model.
+
 AEGIS wraps any CUA model with three inference-time layers:
 
 - **Wide scaling**: run many browser attempts in parallel across Kernel browser instances, then select the best verified trajectory.
@@ -103,11 +105,51 @@ cp .env.example .env
 Fill in your API keys in `.env`:
 
 ```bash
-TZAFON_API_KEY=...       # Northstar CUA model (required)
+# Choose your CUA model provider
+CUA_MODEL_PROVIDER=northstar  # or 'fireworks' for Kimi K2.6 Turbo
+
+# Northstar (default)
+TZAFON_API_KEY=...       # Northstar CUA model via Lightcone
 LIGHTCONE_API_KEY=...    # Alias for TZAFON_API_KEY
+
+# Kimi K2.6 Turbo via Fireworks AI
+FIREWORKS_API_KEY=...    # Get one at https://fireworks.ai/account
+FIREWORKS_BASE_URL=https://api.fireworks.ai/inference/v1
+FIREWORKS_MODEL=accounts/fireworks/routers/kimi-k2p6-turbo
+
+# Browser + verifier
 KERNEL_API_KEY=...       # Kernel cloud browsers (required for default backend)
 MINIMAX_API_KEY=...      # MiniMax verifier model (optional, uses Anthropic by default)
 ```
+
+### Dual-Model Architecture
+
+AEGIS supports a **split-brain** architecture where one model controls the browser and another validates/guides:
+
+**CUA Model (controls browser)** — Northstar via Lightcone API. Set `TZAFON_API_KEY` or `LIGHTCONE_API_KEY`.
+
+**Validator / Guider (validates & guides)** — optional LLM that validates actions, provides strategic guidance when stuck, and verifies extracted results:
+- `VALIDATOR_PROVIDER=local` (default) — cheap heuristics, no API calls
+- `VALIDATOR_PROVIDER=kimi` — Kimi K2.6 Turbo via Fireworks AI for intelligent validation
+
+**Recommended setup:**
+```bash
+# Northstar controls the browser
+TZAFON_API_KEY=sk_...
+
+# Kimi validates and guides
+VALIDATOR_PROVIDER=kimi
+VALIDATOR_API_KEY=fpk_...
+VALIDATOR_BASE_URL=https://api.fireworks.ai/inference/v1
+VALIDATOR_MODEL=accounts/fireworks/routers/kimi-k2p6-turbo
+```
+
+The validator is called at three points:
+1. **Post-action validation** — checks if each browser action makes sense
+2. **Stuck recovery** — provides strategic guidance when the agent loops
+3. **Result verification** — verifies extracted listings match the task
+
+You can also use Kimi as the CUA model directly via `CUA_MODEL_PROVIDER=fireworks`.
 
 ### AEGIS Feature Flags
 

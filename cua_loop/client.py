@@ -14,10 +14,10 @@ from typing import Any
 
 import httpx
 from rich.console import Console
-from tzafon import Lightcone
-
 from cua_loop.action_verifier import LoopBreaker, verify_action_effect
 from cua_loop.approval import approval_event, approval_result
+from cua_loop.models import get_model_provider, ModelProvider
+from cua_loop.validator import get_validator, ValidationResult
 from cua_loop.session_handoff import (
     HandoffContext,
     HANDOFF_TRIGGER_THRESHOLD,
@@ -41,7 +41,14 @@ from cua_loop.types import Step, Trajectory
 
 console = Console()
 
-MODEL = os.getenv("NORTHSTAR_MODEL", "tzafon.northstar-cua-fast")
+_provider: ModelProvider | None = None
+
+def _get_provider() -> ModelProvider:
+    global _provider
+    if _provider is None:
+        _provider = get_model_provider()
+    return _provider
+
 DISPLAY_WIDTH = int(os.getenv("CUA_DISPLAY_WIDTH", "1280"))
 DISPLAY_HEIGHT = int(os.getenv("CUA_DISPLAY_HEIGHT", "720"))
 MAX_STEPS = int(os.getenv("CUA_MAX_STEPS", "40"))
@@ -85,14 +92,8 @@ EFFICIENCY:
 - If you are stuck on a page for more than 2 actions, try pressing Escape and then a different approach.\
 """
 
-TOOLS = [
-    {
-        "type": "computer_use",
-        "display_width": DISPLAY_WIDTH,
-        "display_height": DISPLAY_HEIGHT,
-        "environment": "desktop",
-    }
-]
+def _get_tools() -> list[dict[str, Any]]:
+    return _get_provider().get_tools(DISPLAY_WIDTH, DISPLAY_HEIGHT)
 
 # Strong steering toward keyboard navigation — clicks are imprecise (model
 # emits coordinates in a 0–999 grid, so even after denormalization there is
@@ -319,8 +320,8 @@ def run_single_attempt(
     skip_safety: bool = False,
     _handoff_ctx: HandoffContext | None = None,
 ) -> Trajectory:
-    """One pass of the Northstar CUA loop. No retry. No verification."""
-    lightcone = Lightcone(timeout=120.0)  # CUA round-trips can be slow; use generous timeout
+    """One pass of the CUA loop. No retry. No verification."""
+    provider = _get_provider()
     instruction = task
     if url:
         instruction = f"You are already on {url}. {task}"
@@ -388,10 +389,9 @@ def run_single_attempt(
             except Exception:
                 pass
 
-        response = lightcone.responses.create(
-            model=MODEL,
-            input=[{"role": "user", "content": first_content}],
-            tools=TOOLS,
+        response = provider.create_response(
+            input_messages=[{"role": "user", "content": first_content}],
+            tools=_get_tools(),
         )
 
         action_history: list[tuple[str, int, int]] = []
@@ -419,6 +419,11 @@ def run_single_attempt(
                 break
 
             action = computer_call.action
+            if action is None:
+                traj.error = "model returned computer_call with no action"
+                console.print(f"[red]step {step_idx}: no action in computer_call[/red]")
+                break
+
             step = Step(
                 action_type=action.type,
                 action_args=_action_to_dict(action),
@@ -464,6 +469,13 @@ def run_single_attempt(
 
             stuck = _is_stuck(action_history)
             if stuck and len(action_history) >= _STUCK_FORCE_RECOVERY_THRESHOLD:
+                validator = get_validator()
+                guidance = validator.guide_when_stuck(
+                    task=task,
+                    history=[{"type": s.action_type, "args": s.action_args} for s in traj.steps],
+                    current_url=traj.url,
+                )
+                console.print(f"[yellow]validator guidance:[/yellow] {guidance.advice} (confidence={guidance.confidence:.2f})")
                 console.print("[red]stuck: forcing Escape + scroll recovery[/red]")
                 b.hotkey("Escape")
                 b.scroll(0, 3, 640, 400)
@@ -537,6 +549,7 @@ def run_single_attempt(
             else:
                 b.wait(1)
             after_screenshot_url = b.screenshot_url()
+            action_check = None
             if not skip_safety:
                 action_check = verify_action_effect(action.type, screenshot_url, after_screenshot_url)
                 step.after_screenshot_url = after_screenshot_url
@@ -554,6 +567,22 @@ def run_single_attempt(
                 )
                 if not action_check.passed:
                     console.print(f"[yellow]action verification failed:[/yellow] {action_check.reason}")
+
+            if _flag("AEGIS_LLM_VALIDATION"):
+                validator = get_validator()
+                val = validator.validate_action(
+                    task=task,
+                    action_type=action.type,
+                    action_args=_action_to_dict(action),
+                    screenshot_url=after_screenshot_url,
+                    history=[{"type": s.action_type, "args": s.action_args} for s in traj.steps],
+                )
+                if not val.passed and val.guidance:
+                    console.print(f"[yellow]validator:[/yellow] {val.reason} — {val.guidance}")
+                    call_output_input.append({
+                        "role": "user",
+                        "content": f"[SYSTEM VALIDATOR FEEDBACK] {val.reason}. {val.guidance}",
+                    })
             else:
                 step.after_screenshot_url = after_screenshot_url
                 _notify_ui(step_idx, instruction, after_screenshot_url, action, channel=channel, status="running")
@@ -570,7 +599,7 @@ def run_single_attempt(
                     },
                 }
             ]
-            if not skip_safety and not action_check.passed and action.type in ("click", "double_click"):
+            if not skip_safety and action_check is not None and not action_check.passed and action.type in ("click", "double_click"):
                 ax = getattr(action, "x", 0) or 0
                 ay = getattr(action, "y", 0) or 0
                 call_output_input.append({
@@ -613,11 +642,10 @@ def run_single_attempt(
                     })
                     console.print(f"[blue]mid-loop DOM check:[/blue] {len(mid_listings)} listings found — signaling model to terminate")
 
-            response = lightcone.responses.create(
-                model=MODEL,
+            response = provider.create_response(
+                input_messages=call_output_input,
+                tools=_get_tools(),
                 previous_response_id=response.id,
-                input=call_output_input,
-                tools=TOOLS,
             )
         else:
             traj.error = f"hit MAX_STEPS={MAX_STEPS} without terminating"
