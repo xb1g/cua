@@ -2,7 +2,7 @@ import os
 import asyncio
 import json
 import uvicorn
-from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -82,7 +82,7 @@ def run_agent_sync(url: str | None, task: str):
         )
 
 @app.post("/start")
-async def start_agent(req: StartRequest, background_tasks: BackgroundTasks):
+async def start_agent(req: StartRequest):
     state["status"] = "running"
     state["task"] = req.task
     state["screenshot_url"] = ""
@@ -90,8 +90,10 @@ async def start_agent(req: StartRequest, background_tasks: BackgroundTasks):
     state["step"] = 0
     state["result"] = ""
     await broadcast(state)
-    
-    background_tasks.add_task(run_agent_sync, req.url, req.task)
+
+    loop = asyncio.get_event_loop()
+    import concurrent.futures
+    loop.run_in_executor(None, run_agent_sync, req.url, req.task)
     return {"status": "started"}
 
 @app.get("/stream")
@@ -100,16 +102,23 @@ async def stream(request: Request):
         q = asyncio.Queue()
         clients.add(q)
         try:
-            yield f"data: {json.dumps(state)}\\n\\n"
+            yield f"data: {json.dumps(state)}\n\n"
             while True:
                 if await request.is_disconnected():
                     break
-                data = await q.get()
-                yield f"data: {json.dumps(data)}\\n\\n"
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
         finally:
-            clients.remove(q)
-            
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+            clients.discard(q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
