@@ -8,10 +8,25 @@
     "rows_extracted": 0,
     "schema_valid": false,
     "num_attempts": 1,
-    "duration_s": 42.7,
+    "duration_s": 79.75,
     "blocked_actions": 0,
     "marketplace_score": null,
-    "verifier_reason": "No structured data; agent described listing in text",
+    "verifier_reason": "Agent stuck in click loop, no data extracted",
+    "error": null
+  },
+  {
+    "query": "solid wood dining table under $400 within 15 miles",
+    "marketplace": "offerup",
+    "category": "furniture",
+    "config": "no-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 1,
+    "duration_s": 86.3,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "Agent stuck in click loop, no data extracted",
     "error": null
   },
   {
@@ -23,14 +38,14 @@
     "rows_extracted": 0,
     "schema_valid": false,
     "num_attempts": 1,
-    "duration_s": 49.8,
+    "duration_s": 141.88,
     "blocked_actions": 0,
     "marketplace_score": null,
-    "verifier_reason": "No data extracted; agent stuck in find bar",
+    "verifier_reason": "loop detected no data extracted empty output",
     "error": null
   },
   {
-    "query": "Fender Stratocaster under $800",
+    "query": "Fender Stratocaster used under $800",
     "marketplace": "reverb",
     "category": "instruments",
     "config": "no-aegis",
@@ -38,10 +53,25 @@
     "rows_extracted": 0,
     "schema_valid": false,
     "num_attempts": 1,
-    "duration_s": 20.0,
+    "duration_s": 53.02,
     "blocked_actions": 0,
     "marketplace_score": null,
-    "verifier_reason": "Loop detected, keypress stuck",
-    "error": "loop detected: keypress repeated 3 times"
+    "verifier_reason": "Agent stuck in click loop, no data extracted",
+    "error": null
+  },
+  {
+    "query": "Yamaha acoustic guitar under $150",
+    "marketplace": "craigslist",
+    "category": "instruments",
+    "config": "no-aegis",
+    "success": false,
+    "rows_extracted": 0,
+    "schema_valid": false,
+    "num_attempts": 1,
+    "duration_s": 173.03,
+    "blocked_actions": 0,
+    "marketplace_score": null,
+    "verifier_reason": "Agent loop detected, repeated keypress 6 times, no output produced",
+    "error": null
   }
 ]
