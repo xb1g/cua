@@ -7,7 +7,9 @@ Outer retry / verification logic lives in runner.py.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from typing import Any
 
 import httpx
@@ -319,6 +321,8 @@ def run_single_attempt(
 
             if not computer_call:
                 traj.final_message = message_text
+                if message_text:
+                    traj.extracted = _try_parse_json(message_text)
                 console.print(f"[green]Done at step {step_idx}[/green]: {message_text or ''}")
                 break
 
@@ -474,15 +478,18 @@ def run_single_attempt(
             traj.error = f"hit MAX_STEPS={MAX_STEPS} without terminating"
 
         if _DOM_EXTRACTION and not traj.error:
-            marketplace_name = _detect_marketplace_from_url(traj.url)
-            dom_listings = scroll_and_accumulate(
-                b, marketplace=marketplace_name, max_pages=3, max_items=60
-            )
+            if scroll_and_accumulate is not None and _detect_marketplace_from_url is not None:
+                marketplace_name = _detect_marketplace_from_url(traj.url)
+                dom_listings = scroll_and_accumulate(
+                    b, marketplace=marketplace_name, max_pages=3, max_items=60
+                )
+            else:
+                dom_listings = extract_listings(b, marketplace=None)
             if dom_listings:
                 if traj.extracted and isinstance(traj.extracted, list):
                     traj.extracted.extend(dom_listings)
                 else:
                     traj.extracted = dom_listings
-                console.print(f"[green]DOM extraction:[/green] {len(dom_listings)} listings via scroll-and-accumulate")
+                console.print(f"[green]DOM extraction:[/green] {len(dom_listings)} listings extracted")
 
     return traj
