@@ -57,8 +57,8 @@ SCAM_LISTING = {
 TASK = "Find ergonomic office chairs under $500"
 
 
-def _make_lightcone_mock(extracted: list | None = None):
-    """Build a mock Lightcone client whose responses.create yields a terminate action."""
+def _make_provider_mock():
+    """Build a mock ModelProvider whose create_response yields a terminate action."""
     terminate_action = SimpleNamespace(
         type="terminate",
         result="done",
@@ -75,9 +75,10 @@ def _make_lightcone_mock(extracted: list | None = None):
     response.output = [computer_call]
     response.id = "resp_001"
 
-    lc = MagicMock()
-    lc.responses.create.return_value = response
-    return lc
+    provider = MagicMock()
+    provider.create_response.return_value = response
+    provider.get_tools.return_value = [{"type": "computer_use", "display_width": 1280, "display_height": 720, "environment": "desktop"}]
+    return provider
 
 
 def _make_backend_mock():
@@ -101,7 +102,7 @@ def _make_backend_mock():
 
 
 _PATCHES = {
-    "lightcone": "cua_loop.client.Lightcone",
+    "provider": "cua_loop.client._get_provider",
     "backend": "cua_loop.client.make_backend",
     "action_verifier": "cua_loop.client.verify_action_effect",
     "notify": "cua_loop.client._notify_ui",
@@ -117,16 +118,12 @@ def _isolate_env(monkeypatch, tmp_path):
 class TestFullPipeline:
     def _run(self, extracted, monkeypatch, marketplace_mode="true"):
         monkeypatch.setenv("AEGIS_MARKETPLACE_MODE", marketplace_mode)
-        # Re-evaluate module-level env vars after monkeypatch
         import cua_loop.scaling as scaling_mod
-        import cua_loop.client as client_mod
-        scaling_mod._MARKETPLACE_MODE = marketplace_mode.lower() in {"1", "true", "yes"}
-        client_mod._MARKETPLACE_MODE = marketplace_mode.lower() in {"1", "true", "yes"}
+        monkeypatch.setattr(scaling_mod, "_MARKETPLACE_MODE",
+                            marketplace_mode.lower() in {"1", "true", "yes"})
 
-        lc = _make_lightcone_mock(extracted)
+        provider = _make_provider_mock()
         backend = _make_backend_mock()
-
-        from cua_loop import client as client_module
 
         def _patched_run(**kwargs):
             from cua_loop.types import Trajectory
@@ -136,7 +133,7 @@ class TestFullPipeline:
             return traj
 
         with (
-            patch(_PATCHES["lightcone"], return_value=lc),
+            patch(_PATCHES["provider"], return_value=provider),
             patch(_PATCHES["backend"], backend),
             patch(_PATCHES["action_verifier"], return_value=ActionVerification(True, "ok")),
             patch(_PATCHES["notify"]),
@@ -180,9 +177,6 @@ class TestFullPipeline:
 class TestMarketplaceActionPolicy:
     def test_contact_seller_blocked(self, monkeypatch):
         monkeypatch.setenv("AEGIS_MARKETPLACE_MODE", "true")
-        import cua_loop.client as client_mod
-        client_mod._MARKETPLACE_MODE = True
-
         from cua_loop.marketplace import check_marketplace_action_policy
         action = SimpleNamespace(type="click", text="message seller", url=None, keys=None, result=None)
         policy = check_marketplace_action_policy(action, None)
