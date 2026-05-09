@@ -332,17 +332,39 @@ def run_single_attempt(
         screenshot_url = b.screenshot_url()
         _notify_ui(0, instruction, screenshot_url, channel=channel, status="started")
 
+        first_content: list[dict[str, Any]] = [
+            {"type": "input_text", "text": instruction},
+            {"type": "input_image", "image_url": screenshot_url, "detail": "auto"},
+        ]
+
+        if _PAGE_TEXT_INJECTION:
+            try:
+                page_text = b.execute_js(
+                    "return document.body ? document.body.innerText.substring(0, 4000) : '';"
+                )
+                if page_text and len(page_text.strip()) > 20:
+                    first_content.append({
+                        "type": "input_text",
+                        "text": f"[PAGE TEXT CONTENT]\n{page_text.strip()[:4000]}\n[END PAGE TEXT]",
+                    })
+            except Exception:
+                pass
+
+        if _ELEMENT_ANNOTATIONS:
+            try:
+                elements = get_interactive_elements(b)
+                if elements:
+                    elem_text = format_element_map(elements)
+                    first_content.append({
+                        "type": "input_text",
+                        "text": elem_text,
+                    })
+            except Exception:
+                pass
+
         response = lightcone.responses.create(
             model=MODEL,
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": instruction},
-                        {"type": "input_image", "image_url": screenshot_url, "detail": "auto"},
-                    ],
-                }
-            ],
+            input=[{"role": "user", "content": first_content}],
             tools=TOOLS,
         )
 
