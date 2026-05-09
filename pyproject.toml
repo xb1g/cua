@@ -39,4 +39,4 @@ build-backend = "hatchling.build"
 markers = ["integration: calls real LLM API (requires ANTHROPIC_API_KEY)"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["cua_loop"]
+packages = ["cua_loop", "aegis_core"]

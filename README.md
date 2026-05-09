@@ -131,6 +131,18 @@ Run the local deterministic self-checks:
 uv run aegis-check
 ```
 
+Run just the Stream B action-verification tests:
+
+```bash
+uv run python -m unittest tests.test_verification_stream
+```
+
+Run all local tests:
+
+```bash
+uv run python -m unittest tests.test_verification_stream tests.test_rl tests.test_ecommerce
+```
+
 Run Kernel-backed RL over search strategies:
 
 ```bash

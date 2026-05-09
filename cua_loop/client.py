@@ -15,6 +15,7 @@ from rich.console import Console
 from tzafon import Lightcone
 
 from cua_loop.action_verifier import LoopBreaker, verify_action_effect
+from aegis_core.verification.middleware import StepState, verify_step
 from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
@@ -252,6 +253,7 @@ def run_single_attempt(
                     status="loop_detected",
                     blocked=True,
                     block_reason=loop_check.reason,
+                    agent_id=agent_id,
                 )
                 console.print(f"[red]loop detected:[/red] {loop_check.reason}")
                 break
@@ -263,22 +265,41 @@ def run_single_attempt(
 
             b.wait(1)
             after_screenshot_url = b.screenshot_url()
-            action_check = verify_action_effect(action.type, screenshot_url, after_screenshot_url)
+            state = StepState(
+                goal=task,
+                screenshot=screenshot_url,
+                recent_steps=traj.steps[-6:],
+                recent_screenshots=[s.screenshot_url for s in traj.steps[-6:] if s.screenshot_url],
+                recent_actions=[s.action_args for s in traj.steps[-6:]],
+                failed_step_count=sum(1 for s in traj.steps[-3:] if s.verification_passed is False),
+            )
+            next_state = StepState(
+                goal=task,
+                screenshot=after_screenshot_url,
+                recent_steps=traj.steps[-6:],
+                recent_screenshots=[s.screenshot_url for s in traj.steps[-5:] if s.screenshot_url] + [after_screenshot_url],
+                recent_actions=[s.action_args for s in traj.steps[-6:]],
+                failed_step_count=state.failed_step_count,
+            )
+            verdict = verify_step(state, _action_to_dict(action), next_state)
             step.after_screenshot_url = after_screenshot_url
-            step.verification_passed = action_check.passed
-            step.verification_reason = action_check.reason
+            step.verification_passed = verdict.on_track
+            step.verification_reason = verdict.reason
             _notify_ui(
                 step_idx,
                 instruction,
                 after_screenshot_url,
                 action,
-                status="verified" if action_check.passed else "needs_retry",
-                verification_passed=action_check.passed,
-                verification_reason=action_check.reason,
+                status="verified" if verdict.on_track else "needs_retry",
+                verification_passed=verdict.on_track,
+                verification_reason=verdict.reason,
+                confidence=verdict.confidence,
+                drift_reason=verdict.drift_reason,
+                retry_strategy=verdict.retry_strategy,
                 agent_id=agent_id,
             )
-            if not action_check.passed:
-                console.print(f"[yellow]action verification failed:[/yellow] {action_check.reason}")
+            if not verdict.on_track:
+                console.print(f"[yellow]action verification failed:[/yellow] {verdict.reason}")
             screenshot_url = after_screenshot_url
 
             response = lightcone.responses.create(
