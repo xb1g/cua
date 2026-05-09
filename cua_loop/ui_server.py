@@ -471,12 +471,145 @@ def run_swarm_sync(url: str | None, task: str):
             pass
 
 def run_orchestrated_swarm_sync(task: str, num_agents: int = 6):
+    """Orchestrate the swarm, fan agents out to a thread pool, broadcast each
+    agent's progress on its own channel so the grid lights up.
+
+    Bypasses scaling.run_orchestrated_swarm because its signature
+    (task, agent_tasks) doesn't match num_agents and was silently TypeError'ing
+    on every call. We do the orchestration + execution + light synthesis here.
+    """
+    import time as _time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     import httpx
-    from cua_loop.scaling import run_orchestrated_swarm
+
+    from cua_loop.client import run_single_attempt
+    from cua_loop.swarm_orchestrator import run_swarm_orchestration
+    from cua_loop.types import Trajectory
+
+    def _run_one(agent_idx: int, agent_task) -> dict:
+        channel = f"agent_{agent_idx}"
+        # Seed the per-agent UI cell with role + task so it's not blank while
+        # the model spins up.
+        try:
+            httpx.post(
+                f"http://localhost:8555/update?channel={channel}",
+                json={
+                    "status": "running",
+                    "task": getattr(agent_task, "task_description", "") or "",
+                    "role_name": getattr(agent_task, "role_name", f"Agent {agent_idx + 1}"),
+                    "task_description": getattr(agent_task, "task_description", "") or "",
+                    "step": 0,
+                },
+                timeout=2.0,
+            )
+        except Exception:
+            pass
+
+        started = _time.time()
+        try:
+            traj = run_single_attempt(
+                task=getattr(agent_task, "task_description", task) or task,
+                url=None,
+                extra_context=getattr(agent_task, "specific_instructions", "") or "",
+                channel=channel,
+            )
+            success = not bool(traj.error)
+        except Exception as exc:
+            traj = Trajectory(task=task, url=None, error=str(exc))
+            success = False
+
+        try:
+            httpx.post(
+                f"http://localhost:8555/update?channel={channel}",
+                json={
+                    "status": "success" if success else "failed",
+                    "result": (traj.final_message or traj.error or "")[:300],
+                },
+                timeout=2.0,
+            )
+        except Exception:
+            pass
+
+        return {
+            "agent_id": channel,
+            "role_name": getattr(agent_task, "role_name", f"Agent {agent_idx + 1}"),
+            "task_description": getattr(agent_task, "task_description", "") or "",
+            "success": success,
+            "duration_s": _time.time() - started,
+            "final_message": traj.final_message,
+            "error": traj.error,
+        }
+
     try:
-        result = run_orchestrated_swarm(task=task, num_agents=num_agents)
-        
-        # Get synthesis and intent from the result
+        # 1) Orchestrate
+        plan = run_swarm_orchestration(task=task, num_agents=num_agents)
+        agent_tasks = list(plan.agent_tasks or [])
+        intent = plan.intent
+
+        if not agent_tasks:
+            httpx.post(
+                "http://localhost:8555/update",
+                json={
+                    "status": "failed",
+                    "result": "Orchestrator returned 0 agents. Check OPENAI/ANTHROPIC keys for the orchestrator LLM.",
+                },
+                timeout=10.0,
+            )
+            return
+
+        # 2) Run all agents in parallel; each posts to its own channel.
+        results: list[dict] = []
+        with ThreadPoolExecutor(max_workers=len(agent_tasks)) as pool:
+            futures = {
+                pool.submit(_run_one, i, t): i for i, t in enumerate(agent_tasks)
+            }
+            for future in as_completed(futures):
+                results.append(future.result())
+
+        # 3) Light synthesis — main UI summary.
+        success_count = sum(1 for r in results if r["success"])
+        result_msg = (
+            f"Orchestrated swarm done — {success_count}/{len(results)} agents succeeded.\n"
+            f"Goal: {getattr(intent, 'true_goal', task)}"
+        )
+        payload = {
+            "status": "success" if success_count > 0 else "failed",
+            "result": result_msg,
+            "intent": {
+                "true_goal": getattr(intent, "true_goal", task),
+                "success_criteria": list(getattr(intent, "success_criteria", []) or []),
+                "key_entities": list(getattr(intent, "key_entities", []) or []),
+            },
+            "agent_roles": [
+                {
+                    "agent_id": r["agent_id"],
+                    "role_name": r["role_name"],
+                    "task": r["task_description"],
+                }
+                for r in sorted(results, key=lambda r: r["agent_id"])
+            ],
+        }
+        try:
+            httpx.post("http://localhost:8555/update", json=payload, timeout=10.0)
+        except Exception:
+            pass
+        return
+
+    except Exception as e:
+        try:
+            httpx.post(
+                "http://localhost:8555/update",
+                json={"status": "failed", "result": f"Orchestrated swarm error: {e}\n{traceback.format_exc()}"},
+                timeout=10.0,
+            )
+        except Exception:
+            pass
+        return
+
+    # ── unreachable legacy path below; kept dormant for diff minimization ──
+    try:
+        from cua_loop.scaling import run_orchestrated_swarm
+        result = run_orchestrated_swarm(task=task, agent_tasks=[])  # type: ignore[arg-type]
         synthesis = getattr(result, '_synthesis', None)
         intent = getattr(result, '_intent', None)
         agent_tasks = getattr(result, '_agent_tasks', [])
