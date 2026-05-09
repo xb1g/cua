@@ -89,7 +89,7 @@ MARKETPLACE_REGISTRY: dict[str, MarketplaceAdapter] = {
     "offerup": MarketplaceAdapter(
         generator=offerup_url,
         requires_login=False,
-        bot_detection_level="medium",
+        bot_detection_level="high",
     ),
     "mercari": MarketplaceAdapter(
         generator=mercari_url,
@@ -99,7 +99,7 @@ MARKETPLACE_REGISTRY: dict[str, MarketplaceAdapter] = {
     "ebay_used": MarketplaceAdapter(
         generator=ebay_used_url,
         requires_login=False,
-        bot_detection_level="low",
+        bot_detection_level="high",
     ),
     "reverb": MarketplaceAdapter(
         generator=reverb_url,
