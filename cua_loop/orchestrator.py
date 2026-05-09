@@ -37,11 +37,14 @@ from cua_loop.marketplace import (
     score_marketplace_listing,
 )
 from cua_loop.query_parser import ParsedQuery, parse_query
+from cua_loop.sites import MARKETPLACE_REGISTRY, MarketplaceAdapter
 from cua_loop.types import Trajectory
 from cua_loop.url_params import generate_all_filtered_urls
 from cua_loop.verifier import verify
 
 console = Console()
+
+_DUMMY_ADAPTER = MarketplaceAdapter(generator=lambda q, **kw: "", bot_detection_level="low")
 
 EARLY_STOP_THRESHOLD = int(os.getenv("AEGIS_EARLY_STOP", "10"))
 CUA_FAIL_STEP_LIMIT = int(os.getenv("AEGIS_CUA_FAIL_STEPS", "3"))
@@ -812,6 +815,7 @@ def orchestrate_marketplace(
     location: str | None = None,
     skip_login_required: bool = True,
     early_stop: int = EARLY_STOP_THRESHOLD,
+    include_blocked: bool = False,
 ) -> OrchestratorResult:
     """Specialized multi-marketplace search orchestrator preserved from AEGIS."""
     started = time.time()
@@ -822,6 +826,12 @@ def orchestrate_marketplace(
         location=location,
         skip_login_required=skip_login_required,
     )
+
+    if not include_blocked:
+        urls = {
+            name: url for name, url in urls.items()
+            if MARKETPLACE_REGISTRY.get(name, _DUMMY_ADAPTER).bot_detection_level != "high"
+        }
 
     branches = _assign_strategies(urls)
     for branch in branches:
@@ -911,6 +921,7 @@ def orchestrate(
     location: str | None = None,
     skip_login_required: bool = True,
     early_stop: int = EARLY_STOP_THRESHOLD,
+    include_blocked: bool = False,
 ) -> OrchestratorResult:
     """Backward-compatible alias for the marketplace orchestrator."""
     return orchestrate_marketplace(
@@ -919,6 +930,7 @@ def orchestrate(
         location=location,
         skip_login_required=skip_login_required,
         early_stop=early_stop,
+        include_blocked=include_blocked,
     )
 
 
