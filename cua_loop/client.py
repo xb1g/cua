@@ -329,6 +329,18 @@ def run_single_attempt(
                 b.wait_for_page_load()
             else:
                 b.wait(2)
+            if hasattr(b, "execute_js"):
+                try:
+                    actual_url = b.execute_js("return window.location.href;")
+                    from urllib.parse import urlparse
+                    expected_domain = urlparse(url).hostname or ""
+                    actual_domain = urlparse(actual_url).hostname or ""
+                    if expected_domain and actual_domain and expected_domain not in actual_domain and actual_domain not in expected_domain:
+                        traj.error = f"navigation failed: landed on {actual_domain} instead of {expected_domain}"
+                        console.print(f"[red]early abort:[/red] {traj.error}")
+                        return traj
+                except Exception:
+                    pass
         screenshot_url = b.screenshot_url()
         _notify_ui(0, instruction, screenshot_url, channel=channel, status="started")
 
