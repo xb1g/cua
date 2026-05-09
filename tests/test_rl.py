@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cua_loop.rl import RLPolicy, SearchStrategy, policy_summary, reward_from_attempt, train_policy
+from cua_loop.rl import RLPolicy, SearchStrategy, decayed_epsilon, normalize_rewards, policy_summary, reward_from_attempt, reward_to_beta_success, train_policy
 from cua_loop.types import AttemptResult, Step, Trajectory, VerifierResult
 
 
@@ -39,6 +39,26 @@ class RLPolicyTest(unittest.TestCase):
 
         self.assertEqual(summary[0]["strategy"], "direct_specs")
         self.assertEqual(summary[0]["pulls"], 2)
+        self.assertGreater(summary[0]["successes"], 0)
+
+    def test_thompson_sampling_can_choose_best_strategy(self):
+        random_policy = RLPolicy()
+        random_policy.update("good", 1.4)
+        random_policy.update("good", 1.2)
+        random_policy.update("bad", -0.5)
+        strategies = [SearchStrategy(name="good", instruction=""), SearchStrategy(name="bad", instruction="")]
+
+        selected = random_policy.choose(strategies, epsilon=0.0, algorithm="thompson")
+
+        self.assertIn(selected.name, {"good", "bad"})
+
+    def test_epsilon_decay_and_reward_mapping(self):
+        self.assertEqual(decayed_epsilon(0, 3), 0.3)
+        self.assertEqual(decayed_epsilon(2, 3), 0.05)
+        self.assertEqual(reward_to_beta_success(10), 1.0)
+        self.assertEqual(reward_to_beta_success(-10), 0.0)
+        self.assertEqual(normalize_rewards([0.9, 1.9]), [0.0, 1.0])
+        self.assertEqual(normalize_rewards([1.0, 1.0]), [1.0, 1.0])
 
     def test_train_policy_uses_injected_runner(self):
         strategies = [
@@ -56,8 +76,10 @@ class RLPolicyTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "policy.json"
-            policy = train_policy("find laptop", "https://example.com", 2, 0.0, path, strategies, runner)
+            plot_path = Path(tmp) / "reward_curve.png"
+            policy = train_policy("find laptop", "https://example.com", 2, 0.0, path, strategies, runner, plot_path=plot_path)
             self.assertTrue(path.exists())
+            self.assertTrue(plot_path.exists())
 
         self.assertEqual(policy.stats["a"].pulls, 1)
         self.assertEqual(policy.stats["b"].pulls, 1)

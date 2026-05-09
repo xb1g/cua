@@ -15,6 +15,7 @@ dependencies = [
     "rich>=13.0",
     "kernel-sdk>=6.0.0",
     "fastapi>=0.100.0",
+    "matplotlib>=3.8.0",
     "uvicorn>=0.23.0",
 ]
 
@@ -39,4 +40,4 @@ build-backend = "hatchling.build"
 markers = ["integration: calls real LLM API (requires ANTHROPIC_API_KEY)"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["cua_loop"]
+packages = ["cua_loop", "aegis_core"]
