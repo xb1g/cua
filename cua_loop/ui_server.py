@@ -7,11 +7,19 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import traceback
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
-app = FastAPI()
+shutdown_event = asyncio.Event()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    shutdown_event.set()
+
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 NUM_AGENTS = 9
@@ -118,14 +126,18 @@ async def stream(request: Request):
         clients.add(q)
         try:
             yield f"data: {json.dumps({'type': 'full_state', 'data': state})}\n\n"
-            while True:
+            loops = 0
+            while not shutdown_event.is_set():
                 if await request.is_disconnected():
                     break
                 try:
-                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    data = await asyncio.wait_for(q.get(), timeout=1.0)
                     yield f"data: {json.dumps(data)}\n\n"
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
+                    loops += 1
+                    if loops >= 15:
+                        yield ": keepalive\n\n"
+                        loops = 0
         finally:
             clients.discard(q)
 
