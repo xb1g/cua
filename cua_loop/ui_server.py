@@ -96,7 +96,7 @@ async def broadcast(data):
             await ws.send_json(data)
         except Exception:
             dead_ws.add(ws)
-    ws_clients -= dead_ws
+    ws_clients.difference_update(dead_ws)
 
 async def broadcast_raw(data):
     for q in clients_raw:
