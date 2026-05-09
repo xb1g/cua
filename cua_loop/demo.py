@@ -12,7 +12,7 @@ from cua_loop.scaling import run_wide_scaling
 
 
 def main() -> int:
-    load_dotenv()
+    load_dotenv(override=True)
 
     parser = argparse.ArgumentParser(description="Verified self-correcting CUA loop.")
     parser.add_argument("--task", required=True, help="What you want extracted, in plain English.")
