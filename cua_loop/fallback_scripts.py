@@ -98,12 +98,21 @@ def _wait_for_listings(backend: BrowserBackend, marketplace: str | None) -> None
     sel = _LISTING_WAIT_SELECTORS.get(marketplace or "")
     if not sel:
         return
-    wait_js = f"""
-    await page.waitForSelector({sel!r}, {{ timeout: 8000 }}).catch(() => {{}});
-    return null;
+    poll_js = f"""
+    for (let i = 0; i < 16; i++) {{
+        if (document.querySelector({sel!r})) return 'found';
+        await new Promise(r => setTimeout(r, 500));
+    }}
+    return 'timeout';
     """
     try:
-        backend.execute_playwright(wait_js)
+        if hasattr(backend, "_exec_pw"):
+            backend._exec_pw(f"return await page.evaluate(async () => {{ {poll_js} }});")
+        elif hasattr(backend, "execute_js"):
+            backend.execute_js(poll_js)
+        else:
+            import time
+            time.sleep(3)
     except Exception:
         pass
 

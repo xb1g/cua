@@ -279,9 +279,6 @@ def run_single_attempt(
         instruction = f"You are already on {url}. {task}"
     if extra_context:
         instruction += f"\n\nAdditional context from prior attempts:\n{extra_context}"
-    # Prepend the keyboard-bias playbook so it is the first thing Northstar reads.
-    if os.getenv("CUA_KEYBOARD_BIAS", "1") != "0":
-        instruction = f"{KEYBOARD_BIAS_PROMPT}\n\n---\n\nTask:\n{instruction}"
 
     traj = Trajectory(task=task, url=url)
     backend = make_backend(kind=kind)
