@@ -11,7 +11,12 @@ class Step(BaseModel):
     action_type: str
     action_args: dict[str, Any] = Field(default_factory=dict)
     screenshot_url: str | None = None
+    after_screenshot_url: str | None = None
     model_message: str | None = None
+    verification_passed: bool | None = None
+    verification_reason: str | None = None
+    blocked: bool = False
+    block_reason: str | None = None
 
 
 class Trajectory(BaseModel):
@@ -44,3 +49,4 @@ class RunResult(BaseModel):
     attempts: list[AttemptResult]
     extracted: Any = None
     total_duration_s: float = 0.0
+    selected_attempt_index: int | None = None
