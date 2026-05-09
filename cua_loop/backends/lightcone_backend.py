@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from tzafon import Lightcone
 
 
@@ -51,3 +53,9 @@ class LightconeBackend:
 
     def wait(self, seconds: float) -> None:
         self._computer.wait(seconds)
+
+    def execute_playwright(self, code: str) -> Any:
+        return None
+
+    def wait_for_settle(self) -> None:
+        self._computer.wait(1)

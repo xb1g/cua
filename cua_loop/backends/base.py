@@ -7,7 +7,7 @@ so the CUA loop only depends on screenshot + action semantics.
 from __future__ import annotations
 
 import os
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -31,6 +31,8 @@ class BrowserBackend(Protocol):
     def drag(self, x1: int, y1: int, x2: int, y2: int) -> None: ...
     def navigate(self, url: str) -> None: ...
     def wait(self, seconds: float) -> None: ...
+    def execute_playwright(self, code: str) -> Any: ...
+    def wait_for_settle(self) -> None: ...
 
 
 def make_backend(kind: str = "browser") -> BrowserBackend:
