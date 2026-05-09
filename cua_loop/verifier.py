@@ -90,7 +90,8 @@ def verify(traj: Trajectory) -> VerifierResult:
             reason=f"verifier API error: {type(e).__name__}: {str(e)[:60]}",
         )
 
-    text = (response.choices[0].message.content or "").strip()
+    raw = response.choices[0].message.content
+    text = (str(raw) if raw else "").strip()
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     if text.startswith("```"):
         text = "\n".join(text.split("\n")[1:])
