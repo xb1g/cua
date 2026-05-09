@@ -57,5 +57,5 @@ class LightconeBackend:
     def execute_playwright(self, code: str) -> Any:
         return None
 
-    def wait_for_settle(self) -> None:
+    def wait_for_page_load(self, timeout_ms: int = 5000) -> None:
         self._computer.wait(1)
