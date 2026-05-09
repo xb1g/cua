@@ -9,6 +9,8 @@ Run all:          pytest tests/test_visual_injection.py -v
 
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -185,9 +187,11 @@ class TestLLMResponseParsing:
 # ---------------------------------------------------------------------------
 
 integration = pytest.mark.integration
+_has_anthropic_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
 
 
 @integration
+@pytest.mark.skipif(not _has_anthropic_key, reason="ANTHROPIC_API_KEY not set")
 class TestLLMScanJudgment:
     """Call the real vision model with attack screenshots."""
 
