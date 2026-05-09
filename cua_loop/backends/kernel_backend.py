@@ -13,10 +13,57 @@ Notes:
 from __future__ import annotations
 
 import base64
+import json
+import os
 import time
 from typing import Any
 
 from kernel import Kernel
+
+# Snap-to-element radius. 0 disables snapping entirely (raw model coords).
+SNAP_RADIUS = int(os.getenv("CUA_SNAP_RADIUS", "30"))
+
+# Playwright snippet: given (x, y) in the page viewport, return the centre of
+# the nearest interactive ancestor element if any, plus a debug label.
+_SNAP_JS = """
+(async ({x, y, radius}) => {
+  const SEL = 'a, button, input, select, textarea, summary, label, ' +
+    '[role="button"], [role="link"], [role="checkbox"], [role="menuitem"], ' +
+    '[role="tab"], [role="option"], [role="switch"], [onclick], [tabindex]';
+  const isVisible = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.pointerEvents === 'none') return false;
+    return true;
+  };
+  const target = document.elementFromPoint(x, y);
+  let hit = target && target.closest(SEL);
+  if (hit && isVisible(hit)) {
+    const r = hit.getBoundingClientRect();
+    return { snapped: true, x: r.left + r.width / 2, y: r.top + r.height / 2,
+             tag: hit.tagName, text: (hit.innerText || hit.value || '').trim().slice(0, 60),
+             dist: 0 };
+  }
+  let best = null, bestDist = Infinity;
+  for (const el of document.querySelectorAll(SEL)) {
+    if (!isVisible(el)) continue;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const dx = cx - x, dy = cy - y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < bestDist) { bestDist = d; best = el; }
+  }
+  if (best && bestDist <= radius) {
+    const r = best.getBoundingClientRect();
+    return { snapped: true, x: r.left + r.width / 2, y: r.top + r.height / 2,
+             tag: best.tagName, text: (best.innerText || best.value || '').trim().slice(0, 60),
+             dist: bestDist };
+  }
+  return { snapped: false };
+})({x: __X__, y: __Y__, radius: __R__})
+"""
 
 
 def _png_bytes(result: Any) -> bytes:
@@ -62,11 +109,66 @@ class KernelBackend:
         b = _png_bytes(result)
         return "data:image/png;base64," + base64.b64encode(b).decode()
 
+    def _exec_pw(self, code: str) -> Any:
+        """Run a Playwright snippet inside the Kernel browser VM."""
+        try:
+            return self._kernel.browsers.execute_playwright(id=self._sid, code=code)
+        except AttributeError:
+            invoker = getattr(self._kernel.browsers, "playwright", None)
+            if invoker is None:
+                return None
+            return invoker.execute(id=self._sid, code=code)
+
+    def _snap_coords(self, x: int, y: int) -> tuple[int, int]:
+        """Return (x, y) snapped to the nearest interactive DOM element.
+
+        If snapping is disabled or anything goes wrong, returns the original
+        coordinates. Failure is silent and non-fatal — the worst case is the
+        same imprecise click we would have made anyway.
+        """
+        if SNAP_RADIUS <= 0:
+            return x, y
+        snippet = (
+            "return " + _SNAP_JS.replace("__X__", str(x)).replace("__Y__", str(y)).replace("__R__", str(SNAP_RADIUS))
+        )
+        try:
+            result = self._exec_pw(snippet)
+            data = self._extract_value(result)
+        except Exception:
+            return x, y
+        if not isinstance(data, dict) or not data.get("snapped"):
+            return x, y
+        sx, sy = int(data.get("x", x)), int(data.get("y", y))
+        dist = data.get("dist", 0)
+        text = (data.get("text") or "").replace("\n", " ")
+        if (sx, sy) != (x, y):
+            print(f"[snap] ({x},{y}) -> ({sx},{sy}) d={dist:.0f} <{data.get('tag','?')}> {text!r}")
+        return sx, sy
+
+    @staticmethod
+    def _extract_value(result: Any) -> Any:
+        """Pull a JSON-friendly value out of whatever execute_playwright returns."""
+        if result is None:
+            return None
+        for attr in ("value", "result", "data", "output"):
+            v = getattr(result, attr, None)
+            if v is not None:
+                return v
+        if isinstance(result, (dict, list, str, int, float, bool)):
+            return result
+        # Last resort: try JSON-decoding a string-y representation
+        try:
+            return json.loads(str(result))
+        except Exception:
+            return result
+
     def click(self, x: int, y: int) -> None:
-        self._kernel.browsers.computer.click_mouse(id=self._sid, x=x, y=y)
+        sx, sy = self._snap_coords(x, y)
+        self._kernel.browsers.computer.click_mouse(id=self._sid, x=sx, y=sy)
 
     def double_click(self, x: int, y: int) -> None:
-        self._kernel.browsers.computer.click_mouse(id=self._sid, x=x, y=y, num_clicks=2)
+        sx, sy = self._snap_coords(x, y)
+        self._kernel.browsers.computer.click_mouse(id=self._sid, x=sx, y=sy, num_clicks=2)
 
     def right_click(self, x: int, y: int) -> None:
         self._kernel.browsers.computer.click_mouse(id=self._sid, x=x, y=y, button="right")

@@ -165,16 +165,29 @@ Run the local deterministic self-checks:
 uv run aegis-check
 ```
 
+Run just the Stream B action-verification tests:
+
+```bash
+uv run python -m unittest tests.test_verification_stream
+```
+
+Run all local tests:
+
+```bash
+uv run python -m unittest tests.test_verification_stream tests.test_rl tests.test_ecommerce
+```
+
 Run Kernel-backed RL over search strategies:
 
 ```bash
 uv run aegis-rl \
   --episodes 8 \
+  --algorithm thompson \
   --url "https://sfbay.craigslist.org/search/sss?query=eames+lounge+chair" \
   --task "Find genuine used Eames lounge chairs under \$1500. Reject replicas and scams."
 ```
 
-This trains a contextual bandit over prompt/search strategies. It does not fine-tune model weights; it learns which strategy variants earn the best verifier reward on real Kernel browser sessions.
+This trains a contextual bandit over prompt/search strategies. It supports `--algorithm ucb1` and `--algorithm thompson`, decays exploration from `--epsilon 0.3` to `--epsilon-min 0.05`, and writes `trajectories/reward_curve.png`. It does not fine-tune model weights; it learns which strategy variants earn the best verifier reward on real Kernel browser sessions.
 
 ## Architecture
 

@@ -79,6 +79,27 @@ TOOLS = [
     }
 ]
 
+# Strong steering toward keyboard navigation — clicks are imprecise (model
+# emits coordinates in a 0–999 grid, so even after denormalization there is
+# ±5–10px of noise in screen space). Keyboard is reliable; clicks are not.
+KEYBOARD_BIAS_PROMPT = (
+    "IMPORTANT — strongly prefer keyboard over clicking. Clicks miss small "
+    "targets. Keyboard always works.\n"
+    "Keyboard playbook:\n"
+    "- Cmd-L (or Ctrl-L) to focus the URL bar, then type a URL and press Enter.\n"
+    "- Tab / Shift-Tab to traverse focusable elements; Enter or Space to "
+    "activate the focused one.\n"
+    "- '/' for site search on most sites; type query, then Enter.\n"
+    "- 'j' / 'k' to move down / up feeds (HN, Reddit, Gmail, GitHub).\n"
+    "- Cmd-F (or Ctrl-F) to find any visible text on the page: type a UNIQUE "
+    "snippet, press Enter to land on the match, press Escape to dismiss the "
+    "find bar, then activate with Tab+Enter or click only as a last resort.\n"
+    "- For form fields: Tab between inputs, type the value, never click into a "
+    "field if Tab can reach it.\n"
+    "Only click when there is no keyboard path. When you do click, click in "
+    "the middle of the visible target, not the edge."
+)
+
 
 def _action_to_dict(action: Any) -> dict[str, Any]:
     keys = (
@@ -107,6 +128,7 @@ def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, ch
         httpx.post(
             url,
             json={
+                "agent_id": agent_id,
                 "step": step,
                 "task": task,
                 "screenshot_url": screenshot_url,
@@ -172,8 +194,10 @@ def _execute_action(b: BrowserBackend, action: Any) -> bool:
     Returns True if the loop should terminate.
     """
     t = action.type
-    x = getattr(action, "x", 0) or 0
-    y = getattr(action, "y", 0) or 0
+    # Raw model coordinates (0–999 space) — must be denormalized before use.
+    mx = getattr(action, "x", 0) or 0
+    my = getattr(action, "y", 0) or 0
+    x, y = _denorm(mx, my)
 
     if t == "click" and y < _ADDRESS_BAR_Y_THRESHOLD and getattr(action, "button", "left") == "left":
         b.hotkey("ctrl", "l")
@@ -188,12 +212,15 @@ def _execute_action(b: BrowserBackend, action: Any) -> bool:
     elif t in ("key", "keypress"):
         b.hotkey(*(getattr(action, "keys", []) or []))
     elif t == "scroll":
-        b.scroll(0, getattr(action, "scroll_y", 0) or 0, x or 640, y or 400)
+        sx, sy = _denorm(mx or 500, my or 500)  # use centre fallback in model space
+        b.scroll(0, getattr(action, "scroll_y", 0) or 0, sx, sy)
     elif t == "hscroll":
-        b.scroll(getattr(action, "scroll_x", 0) or 0, 0, x or 640, y or 400)
+        sx, sy = _denorm(mx or 500, my or 500)
+        b.scroll(getattr(action, "scroll_x", 0) or 0, 0, sx, sy)
     elif t == "drag":
-        end_x = getattr(action, "end_x", x) or x
-        end_y = getattr(action, "end_y", y) or y
+        end_mx = getattr(action, "end_x", mx) or mx
+        end_my = getattr(action, "end_y", my) or my
+        end_x, end_y = _denorm(end_mx, end_my)
         b.drag(x, y, end_x, end_y)
     elif t == "navigate":
         b.navigate(getattr(action, "url", "") or "")
@@ -221,9 +248,13 @@ def run_single_attempt(
         instruction = f"You are already on {url}. {task}"
     if extra_context:
         instruction += f"\n\nAdditional context from prior attempts:\n{extra_context}"
+    # Prepend the keyboard-bias playbook so it is the first thing Northstar reads.
+    if os.getenv("CUA_KEYBOARD_BIAS", "1") != "0":
+        instruction = f"{KEYBOARD_BIAS_PROMPT}\n\n---\n\nTask:\n{instruction}"
 
     traj = Trajectory(task=task, url=url)
     backend = make_backend(kind=kind)
+    loop_breaker = LoopBreaker()
 
     with backend as b:
         if url:
@@ -333,6 +364,25 @@ def run_single_attempt(
                 b.hotkey("Escape")
                 b.scroll(0, 3, 640, 400)
                 action_history.clear()
+
+            loop_breaker.record(action)
+            loop_check = loop_breaker.check()
+            if not loop_check.passed:
+                step.blocked = True
+                step.block_reason = loop_check.reason
+                traj.error = f"loop detected: {loop_check.reason}"
+                _notify_ui(
+                    step_idx,
+                    instruction,
+                    screenshot_url,
+                    action,
+                    status="loop_detected",
+                    blocked=True,
+                    block_reason=loop_check.reason,
+                    agent_id=agent_id,
+                )
+                console.print(f"[red]loop detected:[/red] {loop_check.reason}")
+                break
 
             terminated = _execute_action(b, action)
             if terminated:
