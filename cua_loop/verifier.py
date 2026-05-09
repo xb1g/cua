@@ -38,7 +38,7 @@ def _client_singleton() -> Any:
         from openai import OpenAI
 
         base_url = os.getenv("VERIFIER_BASE_URL", "https://api.minimaxi.com/v1")
-        api_key = os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+        api_key = os.getenv("MINIMAX_API_KEY", "")
         _client = OpenAI(api_key=api_key, base_url=base_url, timeout=60.0)
     return _client
 
