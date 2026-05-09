@@ -20,7 +20,11 @@ state = {
     "step": 0,
     "task": "",
     "status": "idle", # idle, running, success, failed
-    "result": ""
+    "result": "",
+    "verification_passed": None,
+    "verification_reason": "",
+    "blocked": False,
+    "block_reason": "",
 }
 
 clients = set()
@@ -31,14 +35,7 @@ async def broadcast(data):
 
 @app.post("/update")
 async def update_state(data: dict):
-    state["screenshot_url"] = data.get("screenshot_url", state["screenshot_url"])
-    state["action"] = data.get("action", state["action"])
-    state["step"] = data.get("step", state["step"])
-    state["task"] = data.get("task", state["task"])
-    if "status" in data:
-        state["status"] = data["status"]
-    if "result" in data:
-        state["result"] = data["result"]
+    state.update({k: v for k, v in data.items() if v is not None})
     await broadcast(state)
     return {"status": "ok"}
 

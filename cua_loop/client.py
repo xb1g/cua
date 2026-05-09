@@ -14,7 +14,9 @@ import httpx
 from rich.console import Console
 from tzafon import Lightcone
 
+from cua_loop.action_verifier import verify_action_effect
 from cua_loop.backends import BrowserBackend, make_backend
+from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
 
 console = Console()
@@ -53,7 +55,7 @@ def _action_to_dict(action: Any) -> dict[str, Any]:
     return {k: getattr(action, k, None) for k in keys if getattr(action, k, None) is not None}
 
 
-def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None) -> None:
+def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, **extra: Any) -> None:
     try:
         httpx.post(
             "http://localhost:8555/update",
@@ -62,6 +64,7 @@ def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None) ->
                 "task": task,
                 "screenshot_url": screenshot_url,
                 "action": _action_to_dict(action) if action else {},
+                **extra,
             },
             timeout=0.2,
         )
@@ -114,7 +117,7 @@ def run_single_attempt(
     kind: str = "browser",
 ) -> Trajectory:
     """One pass of the Northstar CUA loop. No retry. No verification."""
-    lightcone = Lightcone()  # used for the model API only — browser may live elsewhere
+    lightcone = Lightcone()
     instruction = task
     if url:
         instruction = f"Go to {url}. Then: {task}"
@@ -126,7 +129,7 @@ def run_single_attempt(
 
     with backend as b:
         screenshot_url = b.screenshot_url()
-        _notify_ui(0, instruction, screenshot_url)
+        _notify_ui(0, instruction, screenshot_url, status="started")
 
         response = lightcone.responses.create(
             model=MODEL,
@@ -163,16 +166,32 @@ def run_single_attempt(
                 break
 
             action = computer_call.action
-            traj.steps.append(
-                Step(
-                    action_type=action.type,
-                    action_args=_action_to_dict(action),
-                    screenshot_url=screenshot_url,
-                    model_message=message_text,
-                )
+            step = Step(
+                action_type=action.type,
+                action_args=_action_to_dict(action),
+                screenshot_url=screenshot_url,
+                model_message=message_text,
             )
+            traj.steps.append(step)
             console.print(f"[cyan]step {step_idx}[/cyan] {action.type} {_action_to_dict(action)}")
-            _notify_ui(step_idx, instruction, screenshot_url, action)
+            _notify_ui(step_idx, instruction, screenshot_url, action, status="proposed")
+
+            policy = check_action_policy(action, message_text)
+            if not policy.allowed:
+                step.blocked = True
+                step.block_reason = policy.reason
+                traj.error = f"blocked unsafe action: {policy.reason}"
+                _notify_ui(
+                    step_idx,
+                    instruction,
+                    screenshot_url,
+                    action,
+                    status="blocked",
+                    blocked=True,
+                    block_reason=policy.reason,
+                )
+                console.print(f"[red]blocked unsafe action:[/red] {policy.reason}")
+                break
 
             terminated = _execute_action(b, action)
             if terminated:
@@ -180,7 +199,23 @@ def run_single_attempt(
                 break
 
             b.wait(1)
-            screenshot_url = b.screenshot_url()
+            after_screenshot_url = b.screenshot_url()
+            action_check = verify_action_effect(action.type, screenshot_url, after_screenshot_url)
+            step.after_screenshot_url = after_screenshot_url
+            step.verification_passed = action_check.passed
+            step.verification_reason = action_check.reason
+            _notify_ui(
+                step_idx,
+                instruction,
+                after_screenshot_url,
+                action,
+                status="verified" if action_check.passed else "needs_retry",
+                verification_passed=action_check.passed,
+                verification_reason=action_check.reason,
+            )
+            if not action_check.passed:
+                console.print(f"[yellow]action verification failed:[/yellow] {action_check.reason}")
+            screenshot_url = after_screenshot_url
 
             response = lightcone.responses.create(
                 model=MODEL,
