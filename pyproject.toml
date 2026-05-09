@@ -1,0 +1,31 @@
+[project]
+name = "cua-verified-loop"
+version = "0.1.0"
+description = "Verified self-correcting outer loop around any CUA model. Wraps Lightcone Northstar by default."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "tzafon>=0.1.0",
+    "anthropic>=0.40.0",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+critic = [
+    "torch>=2.2",
+    "open-clip-torch>=2.24",
+    "numpy>=1.26",
+]
+
+[project.scripts]
+cua-loop = "cua_loop.demo:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cua_loop"]
