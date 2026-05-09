@@ -632,6 +632,7 @@ def run_single_attempt(
                 marketplace_name = _detect_marketplace_from_url(traj.url) if _detect_marketplace_from_url else None
                 mid_listings = extract_listings(b, marketplace=marketplace_name)
                 if len(mid_listings) >= 5:
+                    traj.extracted = mid_listings
                     call_output_input.append({
                         "role": "user",
                         "content": (
