@@ -21,8 +21,8 @@ ul li{margin-bottom:8px}
 ul li strong{color:#f8fafc}
 .fail-bar{display:inline-block;background:rgba(239,68,68,0.15);border:2px solid #ef4444;border-radius:12px;padding:12px 32px;font-size:28px;font-weight:800;color:#f87171;margin-top:24px}
 table.layers{border-collapse:separate;border-spacing:16px;margin:0 auto}
-table.layers th{font-size:22px;font-weight:800;color:#f8fafc;padding:16px 24px;border-bottom:3px solid #3b82f6;text-align:center;min-width:260px}
-table.layers td{font-size:20px;color:#cbd5e1;padding:12px 24px;text-align:center;background:rgba(30,41,59,0.6);border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
+table.layers th{font-size:19px;font-weight:800;color:#f8fafc;padding:14px 18px;border-bottom:3px solid #3b82f6;text-align:center;min-width:200px}
+table.layers td{font-size:17px;color:#cbd5e1;padding:10px 18px;text-align:center;background:rgba(30,41,59,0.6);border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
 .demo-title{font-size:64px;font-weight:900;letter-spacing:-0.02em;color:#f8fafc;margin-bottom:32px}
 .demo-query{font-size:26px;color:#94a3b8;font-style:italic;margin-bottom:40px}
 table.results-tbl{border-collapse:separate;border-spacing:8px;font-size:22px;margin:0 auto}
@@ -67,7 +67,7 @@ table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,6
 <body>
 
 <!-- Slide 1: Title -->
-<div class="slide active" data-notes="We built AEGIS — three layers of inference-time engineering that double any CUA model's success rate without retraining. Our demo app is Bargain Radar.">
+<div class="slide active" data-notes="We built AEGIS — four layers of inference-time engineering that take any CUA model from 0% to 100% success without retraining. Our demo app is Bargain Radar.">
   <h1>AEGIS</h1>
   <div class="subtitle">Reliability + Safety Middleware for Computer-Use Agents</div>
   <div class="tagline">Bargain Radar: multi-marketplace second-hand deal finder</div>
@@ -85,29 +85,39 @@ table.cost tr.compare td{background:rgba(239,68,68,0.08);border-color:rgba(239,6
   <div class="fail-bar">0% success rate without AEGIS (0/5 tasks)</div>
 </div>
 
-<!-- Slide 3: Three Layers -->
-<div class="slide" data-notes="Layer 1: we spawn parallel browsers across 6 marketplaces with strategy variants. Layer 2: after every single action, we verify the screen actually changed. If it didn't, we retry with feedback. Layer 3: we block dangerous actions like messaging sellers or clicking phishing links, and we scan every screenshot for adversarial prompt injection.">
-  <h2>AEGIS: three inference-time layers</h2>
+<!-- Slide 3: Four Layers -->
+<div class="slide" data-notes="AEGIS has four layers. Layer 1 is the orchestrator — the central brain that coordinates the swarm, assigns different search strategies to each branch, monitors progress in real-time, and cascades from CUA to DOM extraction to fallback scripts per branch. Layer 2 is wide scaling — parallel KERNEL browsers across marketplaces and strategies. Layer 3 is action verification — after every single action, we verify the screen changed, detect if the agent is stuck, and extract DOM data mid-loop. Layer 4 is security — we block dangerous actions, scan for prompt injection, detect scams and replicas, and require human approval for contact actions.">
+  <h2>AEGIS: four inference-time layers</h2>
   <table class="layers">
     <tr>
+      <th>Orchestrator</th>
       <th>Wide Scaling</th>
       <th>Action Verification</th>
       <th>Security Guardrails</th>
     </tr>
     <tr>
+      <td>Central swarm coordinator</td>
       <td>N parallel KERNEL browsers</td>
       <td>Per-step screen-change check</td>
       <td>Dangerous action blocker</td>
     </tr>
     <tr>
-      <td>Best-of-N trajectory selection</td>
-      <td>On-track classifier</td>
-      <td>Visual prompt-injection scanner</td>
+      <td>Strategy assignment per branch</td>
+      <td>Marketplaces x strategy variants</td>
+      <td>Mid-loop DOM extraction</td>
+      <td>Visual injection scanner</td>
     </tr>
     <tr>
-      <td>6 marketplaces x 4 strategies</td>
-      <td>Retry with verifier feedback</td>
+      <td>Real-time progress monitoring</td>
+      <td>Best-of-N trajectory selection</td>
+      <td>Loop detection + stuck recovery</td>
       <td>Human approval flow</td>
+    </tr>
+    <tr>
+      <td>CUA &rarr; DOM &rarr; Fallback cascade</td>
+      <td>Cross-branch learning</td>
+      <td>DOM rescue before termination</td>
+      <td>Scam + replica detection</td>
     </tr>
   </table>
 </div>
