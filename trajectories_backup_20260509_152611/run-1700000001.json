@@ -1,0 +1,222 @@
+{
+  "task": "Find cheap phones on craigslist",
+  "url": "https://craigslist.org/search/sss?query=phone",
+  "success": true,
+  "attempts": [
+    {
+      "attempt_index": 0,
+      "trajectory": {
+        "task": "Find cheap phones on craigslist",
+        "url": "https://craigslist.org/search/sss?query=phone",
+        "steps": [
+          {
+            "action_type": "type",
+            "action_args": {
+              "text": "laptop"
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "click",
+            "action_args": {
+              "x": 100,
+              "y": 200
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "scroll",
+            "action_args": {
+              "dx": 0,
+              "dy": 500
+            },
+            "verification_passed": true
+          }
+        ],
+        "final_message": "Found 14 listings",
+        "extracted": [
+          {
+            "title": "Product 1 Max",
+            "price": "$1590",
+            "url": "https://example.com/item0",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 2 Plus",
+            "price": "$1330",
+            "url": "https://example.com/item1",
+            "condition": "used"
+          },
+          {
+            "title": "Product 3 Plus",
+            "price": "$875",
+            "url": "https://example.com/item2",
+            "condition": "new"
+          },
+          {
+            "title": "Product 4 Max",
+            "price": "$987",
+            "url": "https://example.com/item3",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 5 Air",
+            "price": "$773",
+            "url": "https://example.com/item4",
+            "condition": "used"
+          },
+          {
+            "title": "Product 6 Air",
+            "price": "$121",
+            "url": "https://example.com/item5",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 7 Max",
+            "price": "$264",
+            "url": "https://example.com/item6",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 8 Pro",
+            "price": "$463",
+            "url": "https://example.com/item7",
+            "condition": "new"
+          },
+          {
+            "title": "Product 9 Pro",
+            "price": "$1662",
+            "url": "https://example.com/item8",
+            "condition": "new"
+          },
+          {
+            "title": "Product 10 Air",
+            "price": "$742",
+            "url": "https://example.com/item9",
+            "condition": "used"
+          },
+          {
+            "title": "Product 11 Pro",
+            "price": "$1481",
+            "url": "https://example.com/item10",
+            "condition": "used"
+          },
+          {
+            "title": "Product 12 Pro",
+            "price": "$1473",
+            "url": "https://example.com/item11",
+            "condition": "new"
+          },
+          {
+            "title": "Product 13 Air",
+            "price": "$1725",
+            "url": "https://example.com/item12",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 14 Max",
+            "price": "$150",
+            "url": "https://example.com/item13",
+            "condition": "new"
+          }
+        ],
+        "error": null
+      },
+      "verifier": {
+        "success": true,
+        "rows_extracted": 14,
+        "schema_valid": true,
+        "reason": "14 listings with title+price"
+      },
+      "duration_s": 30.791460082789794
+    }
+  ],
+  "extracted": [
+    {
+      "title": "Product 1 Max",
+      "price": "$1590",
+      "url": "https://example.com/item0",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 2 Plus",
+      "price": "$1330",
+      "url": "https://example.com/item1",
+      "condition": "used"
+    },
+    {
+      "title": "Product 3 Plus",
+      "price": "$875",
+      "url": "https://example.com/item2",
+      "condition": "new"
+    },
+    {
+      "title": "Product 4 Max",
+      "price": "$987",
+      "url": "https://example.com/item3",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 5 Air",
+      "price": "$773",
+      "url": "https://example.com/item4",
+      "condition": "used"
+    },
+    {
+      "title": "Product 6 Air",
+      "price": "$121",
+      "url": "https://example.com/item5",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 7 Max",
+      "price": "$264",
+      "url": "https://example.com/item6",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 8 Pro",
+      "price": "$463",
+      "url": "https://example.com/item7",
+      "condition": "new"
+    },
+    {
+      "title": "Product 9 Pro",
+      "price": "$1662",
+      "url": "https://example.com/item8",
+      "condition": "new"
+    },
+    {
+      "title": "Product 10 Air",
+      "price": "$742",
+      "url": "https://example.com/item9",
+      "condition": "used"
+    },
+    {
+      "title": "Product 11 Pro",
+      "price": "$1481",
+      "url": "https://example.com/item10",
+      "condition": "used"
+    },
+    {
+      "title": "Product 12 Pro",
+      "price": "$1473",
+      "url": "https://example.com/item11",
+      "condition": "new"
+    },
+    {
+      "title": "Product 13 Air",
+      "price": "$1725",
+      "url": "https://example.com/item12",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 14 Max",
+      "price": "$150",
+      "url": "https://example.com/item13",
+      "condition": "new"
+    }
+  ],
+  "total_duration_s": 39.36982625113442,
+  "selected_attempt_index": 0
+}
