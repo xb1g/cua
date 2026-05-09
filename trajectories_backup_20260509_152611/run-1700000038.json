@@ -1,0 +1,234 @@
+{
+  "task": "Find macbooks on ebay",
+  "url": "https://www.ebay.com/sch/i.html?_nkw=macbook",
+  "success": true,
+  "attempts": [
+    {
+      "attempt_index": 0,
+      "trajectory": {
+        "task": "Find macbooks on ebay",
+        "url": "https://www.ebay.com/sch/i.html?_nkw=macbook",
+        "steps": [
+          {
+            "action_type": "type",
+            "action_args": {
+              "text": "laptop"
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "click",
+            "action_args": {
+              "x": 100,
+              "y": 200
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "scroll",
+            "action_args": {
+              "dx": 0,
+              "dy": 500
+            },
+            "verification_passed": true
+          }
+        ],
+        "final_message": "Found 15 listings",
+        "extracted": [
+          {
+            "title": "Product 1 Pro",
+            "price": "$229",
+            "url": "https://example.com/item0",
+            "condition": "new"
+          },
+          {
+            "title": "Product 2 Plus",
+            "price": "$402",
+            "url": "https://example.com/item1",
+            "condition": "new"
+          },
+          {
+            "title": "Product 3 Plus",
+            "price": "$1620",
+            "url": "https://example.com/item2",
+            "condition": "new"
+          },
+          {
+            "title": "Product 4 Air",
+            "price": "$1026",
+            "url": "https://example.com/item3",
+            "condition": "new"
+          },
+          {
+            "title": "Product 5 Max",
+            "price": "$1462",
+            "url": "https://example.com/item4",
+            "condition": "used"
+          },
+          {
+            "title": "Product 6 Plus",
+            "price": "$315",
+            "url": "https://example.com/item5",
+            "condition": "new"
+          },
+          {
+            "title": "Product 7 Max",
+            "price": "$481",
+            "url": "https://example.com/item6",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 8 Max",
+            "price": "$1522",
+            "url": "https://example.com/item7",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 9 Air",
+            "price": "$916",
+            "url": "https://example.com/item8",
+            "condition": "used"
+          },
+          {
+            "title": "Product 10 Air",
+            "price": "$1974",
+            "url": "https://example.com/item9",
+            "condition": "new"
+          },
+          {
+            "title": "Product 11 Plus",
+            "price": "$71",
+            "url": "https://example.com/item10",
+            "condition": "new"
+          },
+          {
+            "title": "Product 12 Pro",
+            "price": "$1281",
+            "url": "https://example.com/item11",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 13 Max",
+            "price": "$1624",
+            "url": "https://example.com/item12",
+            "condition": "used"
+          },
+          {
+            "title": "Product 14 Plus",
+            "price": "$1322",
+            "url": "https://example.com/item13",
+            "condition": "new"
+          },
+          {
+            "title": "Product 15 Air",
+            "price": "$612",
+            "url": "https://example.com/item14",
+            "condition": "new"
+          }
+        ],
+        "error": null
+      },
+      "verifier": {
+        "success": true,
+        "rows_extracted": 15,
+        "schema_valid": true,
+        "reason": "15 listings with title+price"
+      },
+      "duration_s": 19.992290820206545
+    }
+  ],
+  "extracted": [
+    {
+      "title": "Product 1 Pro",
+      "price": "$229",
+      "url": "https://example.com/item0",
+      "condition": "new"
+    },
+    {
+      "title": "Product 2 Plus",
+      "price": "$402",
+      "url": "https://example.com/item1",
+      "condition": "new"
+    },
+    {
+      "title": "Product 3 Plus",
+      "price": "$1620",
+      "url": "https://example.com/item2",
+      "condition": "new"
+    },
+    {
+      "title": "Product 4 Air",
+      "price": "$1026",
+      "url": "https://example.com/item3",
+      "condition": "new"
+    },
+    {
+      "title": "Product 5 Max",
+      "price": "$1462",
+      "url": "https://example.com/item4",
+      "condition": "used"
+    },
+    {
+      "title": "Product 6 Plus",
+      "price": "$315",
+      "url": "https://example.com/item5",
+      "condition": "new"
+    },
+    {
+      "title": "Product 7 Max",
+      "price": "$481",
+      "url": "https://example.com/item6",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 8 Max",
+      "price": "$1522",
+      "url": "https://example.com/item7",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 9 Air",
+      "price": "$916",
+      "url": "https://example.com/item8",
+      "condition": "used"
+    },
+    {
+      "title": "Product 10 Air",
+      "price": "$1974",
+      "url": "https://example.com/item9",
+      "condition": "new"
+    },
+    {
+      "title": "Product 11 Plus",
+      "price": "$71",
+      "url": "https://example.com/item10",
+      "condition": "new"
+    },
+    {
+      "title": "Product 12 Pro",
+      "price": "$1281",
+      "url": "https://example.com/item11",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 13 Max",
+      "price": "$1624",
+      "url": "https://example.com/item12",
+      "condition": "used"
+    },
+    {
+      "title": "Product 14 Plus",
+      "price": "$1322",
+      "url": "https://example.com/item13",
+      "condition": "new"
+    },
+    {
+      "title": "Product 15 Air",
+      "price": "$612",
+      "url": "https://example.com/item14",
+      "condition": "new"
+    }
+  ],
+  "total_duration_s": 79.46682253191115,
+  "selected_attempt_index": 0
+}

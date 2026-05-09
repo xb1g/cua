@@ -1,0 +1,102 @@
+{
+  "task": "Find cheap phones on craigslist",
+  "url": "https://craigslist.org/search/sss?query=phone",
+  "success": true,
+  "attempts": [
+    {
+      "attempt_index": 0,
+      "trajectory": {
+        "task": "Find cheap phones on craigslist",
+        "url": "https://craigslist.org/search/sss?query=phone",
+        "steps": [
+          {
+            "action_type": "type",
+            "action_args": {
+              "text": "laptop"
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "click",
+            "action_args": {
+              "x": 100,
+              "y": 200
+            },
+            "verification_passed": true
+          },
+          {
+            "action_type": "scroll",
+            "action_args": {
+              "dx": 0,
+              "dy": 500
+            },
+            "verification_passed": true
+          }
+        ],
+        "final_message": "Found 4 listings",
+        "extracted": [
+          {
+            "title": "Product 1 Air",
+            "price": "$1116",
+            "url": "https://example.com/item0",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 2 Plus",
+            "price": "$284",
+            "url": "https://example.com/item1",
+            "condition": "refurbished"
+          },
+          {
+            "title": "Product 3 Air",
+            "price": "$644",
+            "url": "https://example.com/item2",
+            "condition": "new"
+          },
+          {
+            "title": "Product 4 Pro",
+            "price": "$1524",
+            "url": "https://example.com/item3",
+            "condition": "used"
+          }
+        ],
+        "error": null
+      },
+      "verifier": {
+        "success": true,
+        "rows_extracted": 4,
+        "schema_valid": true,
+        "reason": "4 listings with title+price"
+      },
+      "duration_s": 34.85953949344871
+    }
+  ],
+  "extracted": [
+    {
+      "title": "Product 1 Air",
+      "price": "$1116",
+      "url": "https://example.com/item0",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 2 Plus",
+      "price": "$284",
+      "url": "https://example.com/item1",
+      "condition": "refurbished"
+    },
+    {
+      "title": "Product 3 Air",
+      "price": "$644",
+      "url": "https://example.com/item2",
+      "condition": "new"
+    },
+    {
+      "title": "Product 4 Pro",
+      "price": "$1524",
+      "url": "https://example.com/item3",
+      "condition": "used"
+    }
+  ],
+  "total_duration_s": 38.805592795386296,
+  "selected_attempt_index": 0
+}
