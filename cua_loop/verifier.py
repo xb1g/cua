@@ -6,7 +6,7 @@ import json
 import os
 import re
 
-from openai import OpenAI
+from anthropic import Anthropic
 
 from cua_loop.types import Trajectory, VerifierResult
 
@@ -29,15 +29,15 @@ Respond with ONLY a JSON object on a single line:
 """
 
 
-_client: OpenAI | None = None
+_client: Anthropic | None = None
 
 
-def _client_singleton() -> OpenAI:
+def _client_singleton() -> Anthropic:
     global _client
     if _client is None:
-        _client = OpenAI(
+        _client = Anthropic(
             api_key=os.getenv("MINIMAX_API_KEY"),
-            base_url="https://api.minimax.io/v1",
+            base_url="https://api.minimaxi.com/anthropic",
         )
     return _client
 
@@ -52,12 +52,12 @@ def verify(traj: Trajectory) -> VerifierResult:
         error=traj.error or "(none)",
     )
 
-    msg = _client_singleton().chat.completions.create(
+    msg = _client_singleton().messages.create(
         model=VERIFIER_MODEL,
         max_tokens=300,
         messages=[{"role": "user", "content": prompt}],
     )
-    text = msg.choices[0].message.content or ""
+    text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
 
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
