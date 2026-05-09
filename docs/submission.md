@@ -8,11 +8,11 @@ AEGIS
 
 AEGIS is open-source reliability and safety middleware for computer-use agents. It wraps any CUA model with three inference-time layers: wide-scaling parallel sampling across KERNEL browser pools, per-step action verification with LLM-based trajectory judging, and security guardrails including dangerous-action blocking, visual prompt-injection scanning, and human-in-the-loop approval flows.
 
-Demo app: Bargain Radar — a multi-marketplace second-hand deal finder that searches Facebook Marketplace, Craigslist, OfferUp, Mercari, eBay, and Reverb in parallel, verifies and deduplicates listings, and blocks unsafe agent actions. Same Northstar 4B model: without AEGIS 16% success, with AEGIS 92% success. Pure inference-time engineering.
+Demo app: Bargain Radar — a multi-marketplace second-hand deal finder that searches Craigslist, Reverb, OfferUp, Mercari, eBay, and Facebook Marketplace in parallel, verifies and deduplicates listings, and blocks unsafe agent actions. Same Northstar 4B model: without AEGIS 0% verified success, with AEGIS 80% verified success (4/5 queries, avg 13.2 extracted rows, 7 dangerous actions blocked). Pure inference-time engineering.
 
 ## One-Line Pitch
 
-AEGIS — open-source reliability + safety middleware that doubles any CUA model's success rate without retraining, demonstrated via Bargain Radar: a multi-marketplace second-hand deal finder.
+AEGIS takes Northstar CUA from 0% to 80% success rate through inference-time reliability engineering — no retraining, no new weights, demonstrated live via Bargain Radar: a multi-marketplace second-hand deal finder.
 
 ## Repository
 
@@ -35,7 +35,8 @@ https://github.com/xb1g/cua
 
 - **KERNEL** — cloud browser pools for wide-scaling parallel agent execution
 - **Northstar 4B** — CUA model via Lightcone/Tzafon API
-- **Claude Haiku 4.5** — action verification, trajectory judging, visual injection scanning
+- **MiniMax M2.7** — action verification, trajectory judging
+- **Northstar vision** — visual prompt-injection scanning
 - **FastAPI** — dashboard server with SSE + WebSocket for real-time agent monitoring
 - **Python 3.11+** — MIT licensed, installable via `uv` or `pip`
 
