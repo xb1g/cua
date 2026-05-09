@@ -27,6 +27,7 @@ console = Console()
 
 DEFAULT_POLICY_PATH = Path(os.getenv("AEGIS_RL_POLICY", "trajectories/aegis-rl-policy.json"))
 DEFAULT_REWARD_PLOT_PATH = Path(os.getenv("AEGIS_RL_PLOT", "trajectories/reward_curve.png"))
+TRAJ_DIR = Path(os.getenv("CUA_TRAJ_DIR", "trajectories"))
 BanditAlgorithm = Literal["ucb1", "thompson"]
 
 
@@ -116,6 +117,21 @@ def load_policy(path: Path = DEFAULT_POLICY_PATH) -> RLPolicy:
 def save_policy(policy: RLPolicy, path: Path = DEFAULT_POLICY_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(policy.model_dump_json(indent=2))
+
+
+def save_attempt(attempt: AttemptResult, task: str, url: str | None, episode: int) -> Path:
+    TRAJ_DIR.mkdir(parents=True, exist_ok=True)
+    fname = TRAJ_DIR / f"rl-ep{episode:04d}-{int(time.time())}.json"
+    run = {
+        "task": task,
+        "url": url,
+        "strategy_episode": episode,
+        "verifier": attempt.verifier.model_dump(),
+        "trajectory": attempt.trajectory.model_dump(),
+        "duration_s": attempt.duration_s,
+    }
+    fname.write_text(json.dumps(run, indent=2, default=str))
+    return fname
 
 
 def reward_from_attempt(attempt: AttemptResult) -> float:
@@ -253,9 +269,11 @@ def train_policy(
         raw_reward = reward_from_attempt(attempt)
         selection_policy.update(strategy.name, raw_reward)
         episode_results.append((strategy.name, raw_reward, attempt))
+        traj_path = save_attempt(attempt, task, url, episode)
         console.print(
             f"raw_reward={raw_reward} success={attempt.verifier.success} "
             f"rows={attempt.verifier.rows_extracted} reason={attempt.verifier.reason!r}"
+            f" saved={traj_path.name}"
         )
 
     normalized_rewards = normalize_rewards([raw_reward for _, raw_reward, _ in episode_results])
