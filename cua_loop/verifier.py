@@ -6,11 +6,11 @@ import json
 import os
 import re
 
-from anthropic import Anthropic
+from openai import OpenAI
 
 from cua_loop.types import Trajectory, VerifierResult
 
-VERIFIER_MODEL = os.getenv("VERIFIER_MODEL", "claude-haiku-4-5-20251001")
+VERIFIER_MODEL = os.getenv("VERIFIER_MODEL", "MiniMax-M2.7-highspeed")
 
 PROMPT = """You are a strict QA verifier judging whether a CUA agent succeeded at a scraping task.
 
@@ -29,13 +29,16 @@ Respond with ONLY a JSON object on a single line:
 """
 
 
-_client: Anthropic | None = None
+_client: OpenAI | None = None
 
 
-def _client_singleton() -> Anthropic:
+def _client_singleton() -> OpenAI:
     global _client
     if _client is None:
-        _client = Anthropic()
+        _client = OpenAI(
+            api_key=os.getenv("MINIMAX_API_KEY"),
+            base_url="https://api.minimax.io/v1",
+        )
     return _client
 
 
@@ -49,12 +52,12 @@ def verify(traj: Trajectory) -> VerifierResult:
         error=traj.error or "(none)",
     )
 
-    msg = _client_singleton().messages.create(
+    msg = _client_singleton().chat.completions.create(
         model=VERIFIER_MODEL,
         max_tokens=300,
         messages=[{"role": "user", "content": prompt}],
     )
-    text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
+    text = msg.choices[0].message.content or ""
 
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
