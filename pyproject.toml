@@ -29,6 +29,7 @@ critic = [
 cua-loop = "cua_loop.demo:main"
 cua-ui = "cua_loop.ui_server:main"
 aegis-check = "cua_loop.self_check:main"
+aegis-rl = "cua_loop.rl:main"
 
 [build-system]
 requires = ["hatchling"]
