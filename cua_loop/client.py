@@ -310,7 +310,6 @@ def run_single_attempt(
 
         response = lightcone.responses.create(
             model=MODEL,
-            instructions=SYSTEM_PROMPT,
             input=[
                 {
                     "role": "user",
