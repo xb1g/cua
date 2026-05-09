@@ -10,6 +10,7 @@ from pathlib import Path
 from rich.console import Console
 
 from cua_loop.client import run_single_attempt
+from cua_loop.fallback_scripts import run_fallback_extraction
 from cua_loop.types import AttemptResult, RunResult
 from cua_loop.verifier import verify
 
@@ -99,13 +100,28 @@ def run_with_retry(
 
         failure_summaries.append(_summarize_failure(attempt))
 
+    extracted = None
+    success = False
+
+    if url:
+        console.print("[yellow]all CUA attempts failed — trying fallback extraction[/yellow]")
+        fallback_listings = run_fallback_extraction(url)
+        if fallback_listings:
+            extracted = fallback_listings
+            success = True
+            console.print(f"[green]fallback rescued {len(fallback_listings)} listings[/green]")
+
     run = RunResult(
         task=task,
         url=url,
-        success=False,
+        success=success,
         attempts=attempts,
+        extracted=extracted,
         total_duration_s=time.time() - started,
     )
     path = _persist(run)
-    console.print(f"[red]✗ all {max_attempts} attempts failed.[/red] saved -> {path}")
+    if success:
+        console.print(f"[green]✓ fallback extraction succeeded.[/green] saved -> {path}")
+    else:
+        console.print(f"[red]✗ all {max_attempts} attempts + fallback failed.[/red] saved -> {path}")
     return run

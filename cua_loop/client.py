@@ -19,7 +19,11 @@ from cua_loop.approval import approval_event, approval_result
 from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.dom_extractor import extract_listings
 from cua_loop.element_annotator import format_element_map, get_interactive_elements
-from cua_loop.pagination import scroll_and_accumulate, _detect_marketplace_from_url
+try:
+    from cua_loop.pagination import scroll_and_accumulate, _detect_marketplace_from_url
+except ImportError:
+    scroll_and_accumulate = None  # type: ignore[assignment]
+    _detect_marketplace_from_url = None  # type: ignore[assignment]
 from cua_loop.marketplace import check_marketplace_action_policy
 from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
