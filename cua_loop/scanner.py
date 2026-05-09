@@ -23,7 +23,7 @@ from typing import Any
 from anthropic import Anthropic
 from pydantic import BaseModel, Field
 
-SCANNER_MODEL = os.getenv("SCANNER_MODEL", "MiniMax-M2.7-highspeed")
+SCANNER_MODEL = os.getenv("SCANNER_MODEL", "claude-haiku-4-5-20251001")
 
 # ---------------------------------------------------------------------------
 # Types
@@ -191,12 +191,13 @@ SCAN_TOOL = {
 def _scanner_client() -> Anthropic:
     global _client
     if _client is None:
-        api_key = os.getenv("MINIMAX_API_KEY")
+        api_key = os.getenv("MINIMAX_API_KEY", "")
         base_url = os.getenv("SCANNER_BASE_URL", "https://api.minimaxi.com/anthropic")
-        kwargs: dict = {"timeout": 60.0, "base_url": base_url}
-        if api_key:
-            kwargs["api_key"] = api_key
-        _client = Anthropic(**kwargs)
+        _client = Anthropic(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=60.0,
+        )
     return _client
 
 
@@ -271,7 +272,10 @@ def scan_screenshot(
             pixel_analysis=pixel,
         )
 
-    llm_result = _llm_scan(image_bytes)
+    try:
+        llm_result = _llm_scan(image_bytes)
+    except Exception:
+        llm_result = {"is_suspicious": False, "confidence": 0.0, "detections": []}
 
     detections = [Detection(**d) for d in llm_result.get("detections", [])]
     if pixel["has_low_contrast_regions"]:
