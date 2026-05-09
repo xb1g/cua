@@ -19,72 +19,155 @@ from cua_loop.backends import BrowserBackend
 # Each returns a JSON array of {title, price, condition, url, seller, posted_age_text, ...}
 
 _CRAIGSLIST_JS = """\
-const rows = document.querySelectorAll('.cl-static-search-result, .result-row, li.result-node');
+const rows = document.querySelectorAll(
+  '.cl-search-result, .cl-static-search-result, .result-row, ' +
+  'li.result-node, li.cl-search-result, .cl-search-result-container > li, ' +
+  '#search-results li, .rows li, .search-list li[data-pid]'
+);
+if (rows.length === 0) {
+  const galleryItems = document.querySelectorAll('.gallery-card, a.cl-app-anchor');
+  if (galleryItems.length > 0) {
+    const items = Array.from(galleryItems).slice(0, 30).map(el => {
+      const text = el.innerText || el.textContent || '';
+      const lines = text.split('\\n').map(s => s.trim()).filter(Boolean);
+      const priceText = lines.find(l => /^\\$/.test(l)) || null;
+      const title = lines.find(l => l.length > 3 && !/^\\$/.test(l)) || '';
+      const href = el.tagName === 'A' ? el.href : (el.querySelector('a') || {}).href || null;
+      return { title, price: priceText, url: href, marketplace: 'craigslist' };
+    }).filter(i => i.title);
+    return JSON.stringify(items);
+  }
+}
 const items = Array.from(rows).slice(0, 30).map(el => {
-  const titleEl = el.querySelector('.titlestring, .result-title, a.posting-title');
-  const priceEl = el.querySelector('.priceinfo, .result-price');
-  const metaEl = el.querySelector('.meta, .result-meta');
-  const linkEl = el.querySelector('a[href]');
+  const titleEl = el.querySelector(
+    '.titlestring, .title, .result-title, a.posting-title, ' +
+    '.cl-app-anchor .titlestring, .label, a.result-title'
+  );
+  const priceEl = el.querySelector('.priceinfo, .result-price, .price, span.priceinfo');
+  const metaEl = el.querySelector('.meta, .result-meta, .housing, .result-hood');
+  const linkEl = el.querySelector('a[href*="/"]');
+  const ageEl = el.querySelector('time, .result-date, .cl-search-result-date, [datetime]');
   return {
-    title: titleEl ? titleEl.innerText.trim() : '',
+    title: titleEl ? titleEl.innerText.trim() : (el.querySelector('a') ? el.querySelector('a').innerText.trim() : ''),
     price: priceEl ? priceEl.innerText.trim() : null,
     url: linkEl ? linkEl.href : null,
     notes: metaEl ? metaEl.innerText.trim() : '',
+    posted_age_text: ageEl ? (ageEl.getAttribute('datetime') || ageEl.innerText.trim()) : null,
     marketplace: 'craigslist',
   };
-}).filter(i => i.title);
+}).filter(i => i.title && i.title.length > 2);
 return JSON.stringify(items);
 """
 
 _EBAY_JS = """\
-const rows = document.querySelectorAll('.s-item, .srp-results li[data-view]');
+const rows = document.querySelectorAll(
+  '.s-item, .srp-results li[data-view], .srp-results .s-item__wrapper, ' +
+  'ul.srp-results li, [data-viewport]'
+);
 const items = Array.from(rows).slice(0, 30).map(el => {
-  const titleEl = el.querySelector('.s-item__title, .s-item__title span');
-  const priceEl = el.querySelector('.s-item__price');
-  const condEl = el.querySelector('.SECONDARY_INFO, .s-item__subtitle');
-  const linkEl = el.querySelector('a.s-item__link');
+  const titleEl = el.querySelector(
+    '.s-item__title span[role="heading"], .s-item__title span, .s-item__title, ' +
+    'h3.s-item__title, [class*="item-title"]'
+  );
+  const priceEl = el.querySelector('.s-item__price, .s-item__price span, [class*="item-price"]');
+  const condEl = el.querySelector(
+    '.SECONDARY_INFO, .s-item__subtitle, [class*="SECONDARY"], ' +
+    '.s-item__condition, [class*="condition"]'
+  );
+  const linkEl = el.querySelector('a.s-item__link, a[href*="itm/"], a[href*="/itm"]');
   const sellerEl = el.querySelector('.s-item__seller-info, .s-item__seller-info-text');
+  const shippingEl = el.querySelector('.s-item__shipping, .s-item__freeXDays');
   return {
     title: titleEl ? titleEl.innerText.trim() : '',
     price: priceEl ? priceEl.innerText.trim() : null,
     condition: condEl ? condEl.innerText.trim() : null,
     url: linkEl ? linkEl.href : null,
     seller: sellerEl ? sellerEl.innerText.trim() : null,
+    notes: shippingEl ? shippingEl.innerText.trim() : null,
     marketplace: 'ebay',
   };
-}).filter(i => i.title && i.title !== 'Shop on eBay');
+}).filter(i => i.title && i.title !== 'Shop on eBay' && i.title !== 'Results matching fewer words');
 return JSON.stringify(items);
 """
 
 _MERCARI_JS = """\
-const rows = document.querySelectorAll('[data-testid="ItemContainer"], [data-testid="SearchResults"] > div');
+const rows = document.querySelectorAll(
+  '[data-testid="ItemContainer"], [data-testid="SearchResults"] > div, ' +
+  '[data-testid*="item"], [class*="ItemGrid"] > div, ' +
+  'a[href*="/item/"], [class*="SearchResultItem"], [class*="productCard"]'
+);
+const seen = new Set();
 const items = Array.from(rows).slice(0, 30).map(el => {
-  const titleEl = el.querySelector('[data-testid="ItemName"], [aria-label]');
-  const priceEl = el.querySelector('[data-testid="ItemPrice"], [class*="Price"]');
-  const linkEl = el.querySelector('a[href*="/item/"]');
+  const linkEl = el.tagName === 'A' ? el : el.querySelector('a[href*="/item/"]');
+  const href = linkEl ? linkEl.href : null;
+  if (href && seen.has(href)) return null;
+  if (href) seen.add(href);
+  const titleEl = el.querySelector(
+    '[data-testid="ItemName"], [data-testid*="name"], [aria-label], ' +
+    '[class*="ItemName"], [class*="item-name"], [class*="itemName"]'
+  );
+  const priceEl = el.querySelector(
+    '[data-testid="ItemPrice"], [data-testid*="price"], ' +
+    '[class*="Price"], [class*="price"]'
+  );
+  const condEl = el.querySelector('[class*="condition"], [class*="Condition"]');
+  let title = '';
+  if (titleEl) {
+    title = (titleEl.getAttribute('aria-label') || titleEl.innerText || '').trim();
+  } else {
+    const texts = (el.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+    title = texts.find(t => t.length > 5 && !/^\\$/.test(t)) || '';
+  }
   return {
-    title: titleEl ? (titleEl.getAttribute('aria-label') || titleEl.innerText).trim() : '',
+    title: title,
     price: priceEl ? priceEl.innerText.trim() : null,
-    url: linkEl ? linkEl.href : null,
+    condition: condEl ? condEl.innerText.trim() : null,
+    url: href,
     marketplace: 'mercari',
   };
-}).filter(i => i.title);
+}).filter(i => i && i.title);
 return JSON.stringify(items);
 """
 
 _OFFERUP_JS = """\
-const rows = document.querySelectorAll('[class*="ItemTile"], [data-testid*="listing"], article');
+let rows = document.querySelectorAll(
+  '[class*="ItemTile"], [data-testid*="listing"], [data-testid*="item"], ' +
+  'article, [class*="listing-card"], [class*="ListingCard"], ' +
+  'a[href*="/item/detail/"], [class*="item-tile"]'
+);
+if (rows.length === 0) {
+  rows = document.querySelectorAll('[class*="tile"], [class*="card"]');
+}
+const seen = new Set();
 const items = Array.from(rows).slice(0, 30).map(el => {
-  const titleEl = el.querySelector('[class*="title"], span[class*="Title"]');
-  const priceEl = el.querySelector('[class*="price"], span[class*="Price"]');
-  const linkEl = el.querySelector('a[href*="/item/"]');
+  const linkEl = el.tagName === 'A' ? el : el.querySelector('a[href*="/item/"]');
+  const href = linkEl ? linkEl.href : null;
+  if (href && seen.has(href)) return null;
+  if (href) seen.add(href);
+  const titleEl = el.querySelector(
+    '[class*="title"], [class*="Title"], span[class*="name"], ' +
+    '[data-testid*="title"], [aria-label]'
+  );
+  const priceEl = el.querySelector(
+    '[class*="price"], [class*="Price"], span[class*="cost"], ' +
+    '[data-testid*="price"]'
+  );
+  const locEl = el.querySelector('[class*="location"], [class*="Location"], [class*="distance"]');
+  let title = '';
+  if (titleEl) {
+    title = (titleEl.getAttribute('aria-label') || titleEl.innerText || '').trim();
+  } else {
+    const lines = (el.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+    title = lines.find(l => l.length > 5 && !/^\\$/.test(l) && !/mile|km/.test(l)) || '';
+  }
   return {
-    title: titleEl ? titleEl.innerText.trim() : '',
+    title: title,
     price: priceEl ? priceEl.innerText.trim() : null,
-    url: linkEl ? linkEl.href : null,
+    url: href,
+    notes: locEl ? locEl.innerText.trim() : null,
     marketplace: 'offerup',
   };
-}).filter(i => i.title);
+}).filter(i => i && i.title);
 return JSON.stringify(items);
 """
 
@@ -123,21 +206,34 @@ return JSON.stringify(items);
 """
 
 _GENERIC_JS = """\
-const selectors = 'article, [data-testid], .listing, .result, .product-card, .search-result';
-const rows = document.querySelectorAll(selectors);
-const items = Array.from(rows).slice(0, 20).map(el => {
+const selectors = [
+  'article', '[data-testid]', '.listing', '.result', '.product-card',
+  '.search-result', '[class*="item"]', '[class*="card"]', '[class*="listing"]',
+  'li[data-pid]', '[class*="result"]'
+].join(', ');
+let rows = document.querySelectorAll(selectors);
+if (rows.length === 0) {
+  rows = document.querySelectorAll('li, .grid > div, main a[href]');
+}
+const seen = new Set();
+const items = Array.from(rows).slice(0, 30).map(el => {
   const text = el.innerText.trim();
-  const linkEl = el.querySelector('a[href]');
+  if (text.length < 10 || text.length > 1000) return null;
+  const linkEl = el.querySelector('a[href]') || (el.tagName === 'A' ? el : null);
+  const href = linkEl ? linkEl.href : null;
+  if (href && seen.has(href)) return null;
+  if (href) seen.add(href);
   const lines = text.split('\\n').map(s => s.trim()).filter(Boolean);
-  const priceText = lines.find(l => /\\$\\d/.test(l)) || null;
-  const title = lines.find(l => l.length > 5 && !/^\\$/.test(l)) || lines[0] || '';
+  const priceText = lines.find(l => /\\$\\s*\\d/.test(l)) || null;
+  const title = lines.find(l => l.length > 5 && !/^\\$/.test(l) && !/^(Free|Sponsored|Ad)$/i.test(l)) || lines[0] || '';
+  if (!title || title.length < 3) return null;
   return {
-    title: title,
+    title: title.substring(0, 120),
     price: priceText,
-    url: linkEl ? linkEl.href : null,
+    url: href,
     marketplace: 'unknown',
   };
-}).filter(i => i.title);
+}).filter(Boolean);
 return JSON.stringify(items);
 """
 
