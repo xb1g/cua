@@ -18,7 +18,8 @@ from cua_loop.pagination import scroll_and_accumulate
 
 console = Console()
 
-_FALLBACK_ENABLED = os.getenv("AEGIS_FALLBACK_EXTRACTION", "true").lower() in {"1", "true", "yes"}
+def _fallback_enabled() -> bool:
+    return os.getenv("AEGIS_FALLBACK_EXTRACTION", "true").lower() in {"1", "true", "yes"}
 
 
 def _detect_marketplace(url: str) -> str | None:
@@ -48,7 +49,7 @@ def run_fallback_extraction(
     max_items: int = 40,
 ) -> list[dict[str, Any]]:
     """Navigate to URL and extract listings deterministically. No LLM."""
-    if not _FALLBACK_ENABLED:
+    if not _fallback_enabled():
         return []
     if not url:
         return []

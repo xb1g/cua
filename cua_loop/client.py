@@ -36,11 +36,11 @@ MODEL = os.getenv("NORTHSTAR_MODEL", "tzafon.northstar-cua-fast")
 DISPLAY_WIDTH = int(os.getenv("CUA_DISPLAY_WIDTH", "1280"))
 DISPLAY_HEIGHT = int(os.getenv("CUA_DISPLAY_HEIGHT", "720"))
 MAX_STEPS = int(os.getenv("CUA_MAX_STEPS", "40"))
-_MARKETPLACE_MODE = os.getenv("AEGIS_MARKETPLACE_MODE", "true").lower() in {"1", "true", "yes"}
 APPROVAL_TIMEOUT = int(os.getenv("AEGIS_APPROVAL_TIMEOUT", "60"))
-_DOM_EXTRACTION = os.getenv("AEGIS_DOM_EXTRACTION", "true").lower() in {"1", "true", "yes"}
-_ELEMENT_ANNOTATIONS = os.getenv("AEGIS_ELEMENT_ANNOTATIONS", "true").lower() in {"1", "true", "yes"}
-_PAGE_TEXT_INJECTION = os.getenv("AEGIS_PAGE_TEXT_INJECTION", "true").lower() in {"1", "true", "yes"}
+
+
+def _flag(name: str, default: str = "true") -> bool:
+    return os.getenv(name, default).lower() in {"1", "true", "yes"}
 
 SYSTEM_PROMPT = """\
 You are a precise web scraping agent controlling a browser. Follow these rules strictly.
@@ -349,7 +349,7 @@ def run_single_attempt(
             {"type": "input_image", "image_url": screenshot_url, "detail": "auto"},
         ]
 
-        if _PAGE_TEXT_INJECTION:
+        if _flag("AEGIS_PAGE_TEXT_INJECTION"):
             try:
                 page_text = b.execute_js(
                     "return document.body ? document.body.innerText.substring(0, 4000) : '';"
@@ -362,7 +362,7 @@ def run_single_attempt(
             except Exception:
                 pass
 
-        if _ELEMENT_ANNOTATIONS:
+        if _flag("AEGIS_ELEMENT_ANNOTATIONS"):
             try:
                 elements = get_interactive_elements(b)
                 if elements:
@@ -417,7 +417,7 @@ def run_single_attempt(
 
             if not skip_safety:
                 policy = check_action_policy(action, message_text)
-                if policy.allowed and _MARKETPLACE_MODE:
+                if policy.allowed and _flag("AEGIS_MARKETPLACE_MODE"):
                     mp_policy = check_marketplace_action_policy(action, message_text)
                     if not mp_policy.allowed:
                         policy = mp_policy
@@ -537,7 +537,7 @@ def run_single_attempt(
                         "use keyboard navigation (Tab/Enter), or navigate to a different URL."
                     ),
                 })
-            if _ELEMENT_ANNOTATIONS:
+            if _flag("AEGIS_ELEMENT_ANNOTATIONS"):
                 loop_elements = get_interactive_elements(b)
                 loop_el_map = format_element_map(loop_elements)
                 if loop_el_map:
@@ -546,7 +546,7 @@ def run_single_attempt(
                         "content": loop_el_map,
                     })
 
-            if _DOM_EXTRACTION and (step_idx > 0 and (step_idx % 5 == 0 or action.type == "scroll")):
+            if _flag("AEGIS_DOM_EXTRACTION") and (step_idx > 0 and (step_idx % 5 == 0 or action.type == "scroll")):
                 marketplace_name = _detect_marketplace_from_url(traj.url) if _detect_marketplace_from_url else None
                 mid_listings = extract_listings(b, marketplace=marketplace_name)
                 if len(mid_listings) >= 5:
@@ -569,7 +569,7 @@ def run_single_attempt(
         else:
             traj.error = f"hit MAX_STEPS={MAX_STEPS} without terminating"
 
-        if _DOM_EXTRACTION and not traj.error:
+        if _flag("AEGIS_DOM_EXTRACTION") and not traj.error:
             if scroll_and_accumulate is not None and _detect_marketplace_from_url is not None:
                 marketplace_name = _detect_marketplace_from_url(traj.url)
                 dom_listings = scroll_and_accumulate(

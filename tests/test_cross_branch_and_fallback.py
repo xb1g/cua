@@ -117,10 +117,10 @@ class TestExtractDemonstration:
 
 
 class TestFallbackExtraction:
-    @patch("cua_loop.fallback_scripts._FALLBACK_ENABLED", True)
+    @patch("cua_loop.fallback_scripts._fallback_enabled", return_value=True)
     @patch("cua_loop.fallback_scripts.make_backend")
     @patch("cua_loop.fallback_scripts.scroll_and_accumulate")
-    def test_fallback_fires_and_returns_listings(self, mock_scroll, mock_backend):
+    def test_fallback_fires_and_returns_listings(self, mock_scroll, mock_backend, mock_enabled):
         mock_scroll.return_value = [
             {"title": "Couch", "price": 150},
             {"title": "Table", "price": 200},
@@ -136,8 +136,8 @@ class TestFallbackExtraction:
         mock_scroll.assert_called_once()
         backend_instance.navigate.assert_called_once()
 
-    @patch("cua_loop.fallback_scripts._FALLBACK_ENABLED", False)
-    def test_fallback_disabled_returns_empty(self):
+    @patch("cua_loop.fallback_scripts._fallback_enabled", return_value=False)
+    def test_fallback_disabled_returns_empty(self, mock_enabled):
         result = run_fallback_extraction("https://example.com")
         assert result == []
 
