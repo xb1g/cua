@@ -120,6 +120,12 @@ uv run cua-loop \
   --task "Find laptops under $1000 with 16GB RAM and 512GB SSD. Extract title, price, URL, availability, shipping estimate, and reject wrong configurations."
 ```
 
+Run the local deterministic self-checks:
+
+```bash
+uv run aegis-check
+```
+
 ## Architecture
 
 ```text
