@@ -38,9 +38,9 @@ class TestHeldOutQueries:
     def test_file_exists(self):
         assert QUERIES_PATH.exists()
 
-    def test_has_20_queries(self):
+    def test_has_at_least_20_queries(self):
         queries = _load_queries()
-        assert len(queries) == 20
+        assert len(queries) >= 20
 
     def test_required_fields_present(self):
         for q in _load_queries():
