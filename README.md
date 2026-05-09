@@ -1,3 +1,6 @@
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
+
 # AEGIS: Bargain Radar
 
 Reliability and safety infrastructure for computer-use agents, demonstrated through a multi-marketplace bargain hunter.
@@ -80,6 +83,9 @@ Recommended live demo targets:
 ### Infrastructure
 
 - `cua_loop/rl.py` — contextual bandit over Kernel-backed search strategies.
+- `cua_loop/critic.py` — self-critique feedback for retry loops.
+- `cua_loop/element_annotator.py` — DOM-aware clickable element bounding box annotation.
+- `cua_loop/self_check.py` — deterministic safety self-checks (run via `aegis-check`).
 - `cua_loop/ui_server.py` — live demo dashboard with Kernel browser grid, split-screen comparison, verdict feed, and ranked bargain board.
 - `cua_loop/demo.py` — CLI entry point.
 - `eval/` — ablation evaluation harness: 20 held-out queries, 5 AEGIS configurations, report generation.
