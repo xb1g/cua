@@ -329,3 +329,32 @@ def orchestrate(
     )
 
     return result
+
+
+def main() -> None:
+    import argparse
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    parser = argparse.ArgumentParser(description="AEGIS marketplace orchestrator")
+    parser.add_argument("--query", required=True, help="Natural language search query")
+    parser.add_argument("--max-browsers", type=int, default=12)
+    parser.add_argument("--location", type=str, default=None)
+    parser.add_argument("--early-stop", type=int, default=EARLY_STOP_THRESHOLD)
+    args = parser.parse_args()
+
+    result = orchestrate(
+        query=args.query,
+        max_browsers=args.max_browsers,
+        location=args.location,
+        early_stop=args.early_stop,
+    )
+    console.print(f"\nsuccess={result.success} listings={result.total_listings_found}")
+    if result.marketplace_scores:
+        console.print(f"top scores: {len(result.marketplace_scores)} scored+deduped listings")
+        for s in result.marketplace_scores[:5]:
+            console.print(f"  {s.listing.title}: ${s.listing.price} (score={s.score:.1f})")
+
+
+if __name__ == "__main__":
+    main()
