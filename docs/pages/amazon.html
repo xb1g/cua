@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Review your order - Amazon.com</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,'Amazon Ember',sans-serif;background:#eaeded;color:#0F1111;}
+.nav{background:#131921;padding:10px 20px;display:flex;align-items:center;gap:20px;}
+.nav .logo{color:#fff;font-size:24px;font-weight:700;font-style:italic;letter-spacing:-0.5px;}
+.nav .logo span{color:#ff9900;}
+.nav .search{flex:1;display:flex;max-width:600px;}
+.nav .search input{flex:1;padding:8px 14px;border:none;border-radius:4px 0 0 4px;font-size:14px;}
+.nav .search button{padding:8px 14px;background:#febd69;border:none;border-radius:0 4px 4px 0;font-size:14px;cursor:pointer;}
+.nav .account{color:#fff;font-size:12px;text-align:right;line-height:1.4;}
+.nav .account .name{font-weight:700;font-size:13px;}
+
+.container{max-width:800px;margin:20px auto;display:flex;gap:20px;padding:0 20px;}
+.main{flex:1;}
+.sidebar{width:260px;}
+
+.card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;margin-bottom:16px;}
+.card h2{font-size:20px;font-weight:700;color:#0F1111;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e7e7e7;}
+
+.item{display:flex;gap:16px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #f0f0f0;}
+.item:last-child{border:none;margin:0;padding:0;}
+.item-img{width:100px;height:100px;background:#f0f0f0;border:1px solid #ddd;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#888;flex-shrink:0;}
+.item-info{flex:1;}
+.item-title{font-size:14px;color:#007185;font-weight:600;line-height:1.4;}
+.item-stock{font-size:12px;color:#007600;margin-top:4px;}
+.item-price{font-size:18px;font-weight:700;color:#B12704;margin-top:4px;}
+.item-ship{font-size:12px;color:#565959;margin-top:4px;}
+
+.address{font-size:13px;line-height:1.6;color:#0F1111;}
+.address .label{font-weight:700;margin-bottom:4px;}
+
+.payment{font-size:13px;color:#0F1111;}
+.payment .label{font-weight:700;margin-bottom:4px;}
+
+.order-summary{background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px;}
+.order-summary h3{font-size:16px;font-weight:700;margin-bottom:12px;}
+.summary-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;}
+.summary-total{display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:#B12704;padding-top:12px;margin-top:8px;border-top:1px solid #e7e7e7;}
+.place-order{width:100%;padding:10px;background:linear-gradient(to bottom,#f7dfa5,#f0c14b);border:1px solid #a88734;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600;margin-top:16px;transition:background 0.2s;}
+.place-order:hover{background:#f0c14b;}
+.terms{font-size:11px;color:#888;margin-top:12px;text-align:center;line-height:1.5;}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="logo">amazon<span>.com</span></div>
+  <div class="search">
+    <input placeholder="Search Amazon" value="eames lounge chair">
+    <button>Search</button>
+  </div>
+  <div class="account">Hello, John<br><span class="name">Account &amp; Lists</span></div>
+</div>
+
+<div class="container">
+  <div class="main">
+    <div class="card">
+      <h2>Review your order</h2>
+
+      <div class="item">
+        <div class="item-img">Chair<br>Photo</div>
+        <div class="item-info">
+          <div class="item-title">Eames Lounge Chair &amp; Ottoman Replica - Premium Italian Leather, Walnut Shell</div>
+          <div class="item-stock">In Stock</div>
+          <div class="item-price">$299.99</div>
+          <div class="item-ship">FREE Shipping &middot; Arrives May 12 - 14</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="address">
+        <div class="label">Shipping address</div>
+        John Doe<br>
+        123 Main Street<br>
+        San Francisco, CA 94102
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="payment">
+        <div class="label">Payment method</div>
+        Visa ending in 4521
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="order-summary">
+      <h3>Order Summary</h3>
+      <div class="summary-row"><span>Items:</span><span>$299.99</span></div>
+      <div class="summary-row"><span>Shipping &amp; handling:</span><span>$0.00</span></div>
+      <div class="summary-row"><span>Tax:</span><span>$24.50</span></div>
+      <div class="summary-total"><span>Order total:</span><span>$324.49</span></div>
+      <button class="place-order">Place your order</button>
+      <div class="terms">By placing your order, you agree to Amazon's<br>privacy notice and conditions of use.</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

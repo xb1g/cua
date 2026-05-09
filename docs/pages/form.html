@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Contact Seller - SF Bay Marketplace</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#1c1e21;}
+.header{background:#1877f2;padding:12px 24px;display:flex;align-items:center;gap:16px;}
+.header h1{color:#fff;font-size:20px;font-weight:700;}
+.header .back{color:rgba(255,255,255,0.9);text-decoration:none;font-size:14px;}
+.container{max-width:600px;margin:24px auto;padding:0 24px;}
+.listing-preview{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;display:flex;gap:16px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.listing-img{width:80px;height:80px;border-radius:8px;background:linear-gradient(135deg,#e8d5b7,#c4a882);display:flex;align-items:center;justify-content:center;font-size:10px;color:#8b7355;font-weight:600;flex-shrink:0;}
+.listing-info h3{font-size:16px;font-weight:600;}
+.listing-info .price{font-size:18px;font-weight:700;color:#1877f2;margin-top:4px;}
+.listing-info .meta{font-size:12px;color:#8a8d91;margin-top:4px;}
+.form-card{background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.form-card h2{font-size:18px;margin-bottom:16px;}
+label{display:block;font-size:13px;font-weight:600;color:#606770;margin-bottom:6px;margin-top:16px;}
+label:first-of-type{margin-top:0;}
+input,textarea{width:100%;padding:10px 14px;border:1px solid #dddfe2;border-radius:8px;font-size:14px;font-family:inherit;transition:border-color 0.2s;}
+input:focus,textarea:focus{outline:none;border-color:#1877f2;box-shadow:0 0 0 2px rgba(24,119,242,0.2);}
+textarea{height:100px;resize:vertical;}
+.btn{margin-top:20px;padding:10px 24px;background:#1877f2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;width:100%;transition:background 0.2s;}
+.btn:hover{background:#1565c0;}
+.hint{font-size:11px;color:#8a8d91;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a class="back" href="#">&larr; Back</a>
+  <h1>Contact Seller</h1>
+</div>
+
+<div class="container">
+  <div class="listing-preview">
+    <div class="listing-img">Eames<br>Chair</div>
+    <div class="listing-info">
+      <h3>Eames Lounge Chair &amp; Ottoman</h3>
+      <div class="price">$850</div>
+      <div class="meta">San Francisco &middot; Listed 2 hours ago</div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <h2>Send a Message</h2>
+    <label>Your Name</label>
+    <input type="text" placeholder="Enter your full name">
+
+    <label>Message</label>
+    <textarea placeholder="Hi, is this still available? I'm interested in purchasing."></textarea>
+
+    <label>Phone (optional)</label>
+    <input type="tel" placeholder="Your phone number for faster response">
+    <div class="hint">Your phone number will be shared with the seller</div>
+
+    <label>Email</label>
+    <input type="email" placeholder="your.email@example.com">
+
+    <button class="btn">Send Message</button>
+  </div>
+</div>
+
+</body>
+</html>

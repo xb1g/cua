@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Chat with Seller - SF Bay Marketplace</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;display:flex;height:100vh;color:#1c1e21;}
+.sidebar{width:320px;border-right:1px solid #e4e6eb;display:flex;flex-direction:column;background:#fff;}
+.sidebar-header{padding:12px 16px;border-bottom:1px solid #e4e6eb;}
+.sidebar-header h2{font-size:20px;font-weight:700;}
+.chat-list{flex:1;overflow-y:auto;}
+.chat-item{display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;transition:background 0.15s;}
+.chat-item:hover{background:#f0f2f5;}
+.chat-item.active{background:#e7f3ff;}
+.avatar{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;flex-shrink:0;}
+.chat-item:nth-child(1) .avatar{background:#1877f2;}
+.chat-item:nth-child(2) .avatar{background:#42b883;}
+.chat-item:nth-child(3) .avatar{background:#e4405f;}
+.chat-preview{flex:1;min-width:0;}
+.chat-preview .name{font-weight:600;font-size:14px;}
+.chat-preview .last-msg{font-size:12px;color:#65676b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chat-preview .time{font-size:11px;color:#8a8d91;}
+
+.main-chat{flex:1;display:flex;flex-direction:column;}
+.chat-header{padding:12px 20px;border-bottom:1px solid #e4e6eb;display:flex;align-items:center;gap:12px;}
+.chat-header .avatar{width:36px;height:36px;font-size:13px;background:#1877f2;}
+.chat-header .info .name{font-weight:600;font-size:15px;}
+.chat-header .info .status{font-size:11px;color:#65676b;}
+
+.messages{flex:1;padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;background:#fff;}
+.msg{max-width:65%;padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;}
+.msg.them{background:#e4e6eb;color:#1c1e21;align-self:flex-start;border-bottom-left-radius:4px;}
+.msg.me{background:#1877f2;color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
+.msg-time{font-size:10px;color:#8a8d91;text-align:center;margin:8px 0;}
+
+.input-area{padding:12px 16px;border-top:1px solid #e4e6eb;display:flex;gap:8px;align-items:center;}
+.input-area input{flex:1;padding:10px 16px;border:1px solid #e4e6eb;border-radius:24px;font-size:14px;outline:none;transition:border-color 0.2s;}
+.input-area input:focus{border-color:#1877f2;}
+.send-btn{padding:8px 20px;background:#1877f2;color:#fff;border:none;border-radius:24px;font-size:14px;font-weight:600;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header"><h2>Chats</h2></div>
+  <div class="chat-list">
+    <div class="chat-item active">
+      <div class="avatar">MR</div>
+      <div class="chat-preview">
+        <div class="name">Mike R.</div>
+        <div class="last-msg">I could do $800 if you can pick up today</div>
+        <div class="time">2:34 PM</div>
+      </div>
+    </div>
+    <div class="chat-item">
+      <div class="avatar">SL</div>
+      <div class="chat-preview">
+        <div class="name">Sarah L.</div>
+        <div class="last-msg">Sure, I can hold it for you until Friday</div>
+        <div class="time">Yesterday</div>
+      </div>
+    </div>
+    <div class="chat-item">
+      <div class="avatar">JK</div>
+      <div class="chat-preview">
+        <div class="name">James K.</div>
+        <div class="last-msg">Sorry, that item has been sold</div>
+        <div class="time">May 7</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="main-chat">
+  <div class="chat-header">
+    <div class="avatar">MR</div>
+    <div class="info">
+      <div class="name">Mike R.</div>
+      <div class="status">Active now &middot; Marketplace Seller</div>
+    </div>
+  </div>
+
+  <div class="messages">
+    <div class="msg-time">Today 2:30 PM</div>
+    <div class="msg me">Hi! I saw your Eames Lounge Chair listing. Is it still available?</div>
+    <div class="msg them">Hi! Yes, the Eames chair is still available. Are you interested?</div>
+    <div class="msg me">Definitely! It looks great. Is the price negotiable?</div>
+    <div class="msg them">I could do $800 if you can pick up today. I'm in Pacific Heights.</div>
+    <div class="msg me">That works for me! Let me check my schedule.</div>
+    <div class="msg them">Sounds good! Just let me know. I'm free after 3 PM today.</div>
+  </div>
+
+  <div class="input-area">
+    <input type="text" placeholder="Type a message...">
+    <button class="send-btn">Send</button>
+  </div>
+</div>
+
+</body>
+</html>
