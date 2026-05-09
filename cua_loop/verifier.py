@@ -38,6 +38,7 @@ def _client_singleton() -> Anthropic:
         _client = Anthropic(
             api_key=os.getenv("MINIMAX_API_KEY"),
             base_url="https://api.minimaxi.com/anthropic",
+            timeout=60.0,
         )
     return _client
 
@@ -52,11 +53,14 @@ def verify(traj: Trajectory) -> VerifierResult:
         error=traj.error or "(none)",
     )
 
-    msg = _client_singleton().messages.create(
-        model=VERIFIER_MODEL,
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        msg = _client_singleton().messages.create(
+            model=VERIFIER_MODEL,
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        return VerifierResult(success=False, reason=f"verifier API error: {type(e).__name__}: {str(e)[:60]}")
     text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
 
     match = re.search(r"\{.*\}", text, re.DOTALL)

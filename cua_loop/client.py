@@ -117,7 +117,7 @@ def run_single_attempt(
     kind: str = "browser",
 ) -> Trajectory:
     """One pass of the Northstar CUA loop. No retry. No verification."""
-    lightcone = Lightcone()
+    lightcone = Lightcone(timeout=120.0)  # CUA round-trips can be slow; use generous timeout
     instruction = task
     if url:
         instruction = f"Go to {url}. Then: {task}"
