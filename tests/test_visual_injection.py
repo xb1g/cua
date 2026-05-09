@@ -150,18 +150,16 @@ class TestLLMResponseParsing:
         )
         assert any(d.technique == "low_contrast" for d in result.detections)
 
-    @patch("cua_loop.scanner._scanner_client")
-    def test_no_duplicate_low_contrast_detections(self, mock_client, screenshots):
+    @patch("cua_loop.scanner._llm_scan")
+    def test_no_duplicate_low_contrast_detections(self, mock_scan, screenshots):
         """If both LLM and pixel analysis report low_contrast, don't duplicate."""
-        client = MagicMock()
-        client.messages.create.return_value = _mock_llm_scan_result([
+        mock_scan.return_value = _mock_llm_result([
             {
                 "technique": "low_contrast",
                 "description": "Near-invisible white text detected",
                 "severity": "high",
             }
         ])
-        mock_client.return_value = client
 
         result = scan_screenshot(screenshots["white_on_white"])
         low_contrast_count = sum(1 for d in result.detections if d.technique == "low_contrast")
