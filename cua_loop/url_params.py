@@ -66,16 +66,18 @@ def ebay_filtered_url(pq: ParsedQuery, location: str | None = None) -> str:
 def mercari_filtered_url(pq: ParsedQuery, location: str | None = None) -> str:
     params: dict[str, str] = {
         "keyword": pq.keywords,
-        "order": "price_asc",
-        "status": "on_sale",  # Only active listings
+        "order": "relevance",
+        "status": "on_sale",
     }
     if pq.max_price is not None:
         params["maxPrice"] = str(int(pq.max_price))
+    if pq.max_price is not None and pq.max_price >= 50:
+        params["minPrice"] = str(max(1, int(pq.max_price * 0.05)))
     filters = {f.lower() for f in pq.condition_filters}
     if any(k in filters for k in ("like new", "excellent condition", "mint condition")):
-        params["itemCondition"] = "2"  # Like New
+        params["itemCondition"] = "2"
     elif "new in box" in filters:
-        params["itemCondition"] = "1"  # New
+        params["itemCondition"] = "1"
     return f"https://www.mercari.com/search/?{urlencode(params)}"
 
 

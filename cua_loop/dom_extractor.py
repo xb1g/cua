@@ -94,39 +94,54 @@ _MERCARI_JS = """\
 const rows = document.querySelectorAll(
   '[data-testid="ItemContainer"], [data-testid="SearchResults"] > div, ' +
   '[data-testid*="item"], [class*="ItemGrid"] > div, ' +
-  'a[href*="/item/"], [class*="SearchResultItem"], [class*="productCard"]'
+  '[class*="SearchResultItem"], [class*="productCard"], [class*="ProductThumb"]'
 );
 const seen = new Set();
 const items = Array.from(rows).slice(0, 30).map(el => {
-  const linkEl = el.tagName === 'A' ? el : el.querySelector('a[href*="/item/"]');
+  const linkEl = el.tagName === 'A' ? el : el.querySelector('a[href*="/item/"], a[href*="/us/item/"]');
   const href = linkEl ? linkEl.href : null;
   if (href && seen.has(href)) return null;
   if (href) seen.add(href);
-  const titleEl = el.querySelector(
-    '[data-testid="ItemName"], [data-testid*="name"], [aria-label], ' +
-    '[class*="ItemName"], [class*="item-name"], [class*="itemName"]'
-  );
-  const priceEl = el.querySelector(
-    '[data-testid="ItemPrice"], [data-testid*="price"], ' +
-    '[class*="Price"], [class*="price"]'
-  );
-  const condEl = el.querySelector('[class*="condition"], [class*="Condition"]');
+  const allPs = el.querySelectorAll('p');
   let title = '';
-  if (titleEl) {
-    title = (titleEl.getAttribute('aria-label') || titleEl.innerText || '').trim();
-  } else {
-    const texts = (el.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
-    title = texts.find(t => t.length > 5 && !/^\\$/.test(t)) || '';
+  let price = null;
+  for (var i = 0; i < allPs.length; i++) {
+    var rawTxt = allPs[i].innerText.trim();
+    if (!rawTxt) continue;
+    var firstLine = rawTxt.split('\\n')[0].trim();
+    if (/^\\$[0-9]/.test(firstLine) && !price) {
+      price = firstLine;
+    } else if (firstLine.length > 5 && !title && !/^\\$/.test(firstLine)) {
+      title = firstLine;
+    }
+  }
+  if (!title) {
+    const titleEl = el.querySelector('[data-testid="ItemName"], [class*="ItemName"], [aria-label]');
+    if (titleEl) title = (titleEl.getAttribute('aria-label') || titleEl.innerText || '').trim();
+  }
+  if (!price) {
+    const priceEl = el.querySelector('[data-testid="ItemPrice"], [class*="Price"], [class*="price"]');
+    if (priceEl) price = priceEl.innerText.trim();
+  }
+  if (!title) {
+    var lines = (el.innerText || '').split('\\n').filter(function(l) { return l.trim().length > 5; });
+    title = lines.find(function(l) { return !/^\\$/.test(l.trim()); }) || '';
   }
   return {
-    title: title,
-    price: priceEl ? priceEl.innerText.trim() : null,
-    condition: condEl ? condEl.innerText.trim() : null,
+    title: title.substring(0, 120),
+    price: price,
     url: href,
     marketplace: 'mercari',
   };
-}).filter(i => i && i.title);
-return JSON.stringify(items);
+}).filter(function(i) { return i && i.title && i.title.length > 3; });
+var dedupedByTitle = {};
+items.forEach(function(it) {
+  var key = it.title.toLowerCase().trim();
+  if (!dedupedByTitle[key] || (it.url && !dedupedByTitle[key].url) || (it.price && !dedupedByTitle[key].price)) {
+    dedupedByTitle[key] = it;
+  }
+});
+return JSON.stringify(Object.values(dedupedByTitle));
 """
 
 _OFFERUP_JS = """\
