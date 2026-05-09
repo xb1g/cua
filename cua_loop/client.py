@@ -19,6 +19,7 @@ from cua_loop.approval import approval_event, approval_result
 from cua_loop.backends import BrowserBackend, make_backend
 from cua_loop.dom_extractor import extract_listings
 from cua_loop.element_annotator import format_element_map, get_interactive_elements
+from cua_loop.pagination import scroll_and_accumulate, _detect_marketplace_from_url
 from cua_loop.marketplace import check_marketplace_action_policy
 from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
@@ -377,10 +378,12 @@ def run_single_attempt(
                 }
             ]
             if not skip_safety and not action_check.passed and action.type in ("click", "double_click"):
+                ax = getattr(action, "x", 0) or 0
+                ay = getattr(action, "y", 0) or 0
                 call_output_input.append({
                     "role": "user",
                     "content": (
-                        f"Your last {action.type} at ({x},{y}) had no visible effect. "
+                        f"Your last {action.type} at ({ax},{ay}) had no visible effect. "
                         "Try a different approach: use keyboard navigation (Tab then Enter), "
                         "scroll to reveal the element, or use a keyboard shortcut instead."
                     ),
@@ -413,12 +416,15 @@ def run_single_attempt(
             traj.error = f"hit MAX_STEPS={MAX_STEPS} without terminating"
 
         if _DOM_EXTRACTION and not traj.error:
-            dom_listings = extract_listings(b, marketplace=None)
+            marketplace_name = _detect_marketplace_from_url(traj.url)
+            dom_listings = scroll_and_accumulate(
+                b, marketplace=marketplace_name, max_pages=3, max_items=60
+            )
             if dom_listings:
                 if traj.extracted and isinstance(traj.extracted, list):
                     traj.extracted.extend(dom_listings)
                 else:
                     traj.extracted = dom_listings
-                console.print(f"[green]DOM extraction:[/green] {len(dom_listings)} listings extracted")
+                console.print(f"[green]DOM extraction:[/green] {len(dom_listings)} listings via scroll-and-accumulate")
 
     return traj
