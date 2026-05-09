@@ -225,8 +225,8 @@ def _llm_extract_listings(text: str) -> list[dict] | None:
     """Use MiniMax to convert natural-language listing descriptions to JSON."""
     try:
         from openai import OpenAI
-        api_key = os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY", "")
-        base_url = os.getenv("VERIFIER_BASE_URL", "https://api.minimax.chat/v1")
+        api_key = os.getenv("MINIMAX_API_KEY", "")
+        base_url = os.getenv("VERIFIER_BASE_URL", "https://api.minimaxi.com/v1")
         model = os.getenv("VERIFIER_MODEL", "MiniMax-M2.7-highspeed")
         client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
         resp = client.chat.completions.create(

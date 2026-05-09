@@ -193,11 +193,12 @@ def _scanner_client() -> Anthropic:
     if _client is None:
         api_key = os.getenv("MINIMAX_API_KEY", "")
         base_url = os.getenv("SCANNER_BASE_URL", "https://api.minimaxi.com/anthropic")
-        _client = Anthropic(
-            api_key=api_key,
-            base_url=base_url,
-            timeout=60.0,
-        )
+        kwargs: dict = {"timeout": 60.0}
+        if base_url:
+            kwargs["base_url"] = base_url
+        if api_key:
+            kwargs["api_key"] = api_key
+        _client = Anthropic(**kwargs)
     return _client
 
 
