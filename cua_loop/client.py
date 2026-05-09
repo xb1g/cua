@@ -15,7 +15,9 @@ from rich.console import Console
 from tzafon import Lightcone
 
 from cua_loop.action_verifier import verify_action_effect
+from cua_loop.approval import approval_event, approval_result
 from cua_loop.backends import BrowserBackend, make_backend
+from cua_loop.dom_extractor import extract_listings
 from cua_loop.marketplace import check_marketplace_action_policy
 from cua_loop.security import check_action_policy
 from cua_loop.types import Step, Trajectory
@@ -27,6 +29,8 @@ DISPLAY_WIDTH = int(os.getenv("CUA_DISPLAY_WIDTH", "1280"))
 DISPLAY_HEIGHT = int(os.getenv("CUA_DISPLAY_HEIGHT", "720"))
 MAX_STEPS = int(os.getenv("CUA_MAX_STEPS", "40"))
 _MARKETPLACE_MODE = os.getenv("AEGIS_MARKETPLACE_MODE", "true").lower() in {"1", "true", "yes"}
+APPROVAL_TIMEOUT = int(os.getenv("AEGIS_APPROVAL_TIMEOUT", "60"))
+_DOM_EXTRACTION = os.getenv("AEGIS_DOM_EXTRACTION", "true").lower() in {"1", "true", "yes"}
 
 SYSTEM_PROMPT = """\
 You are a precise web scraping agent controlling a browser. Follow these rules strictly.
@@ -111,7 +115,51 @@ def _notify_ui(step: int, task: str, screenshot_url: str, action: Any = None, ch
         pass
 
 
+
+
+def _request_approval(step_idx: int, instruction: str, screenshot_url: str,
+                      action: Any, policy_reason: str, channel: str = "") -> bool:
+    """Broadcast approval request and block until human responds or timeout."""
+    approval_event.clear()
+    action_dict = _action_to_dict(action)
+    _notify_ui(
+        step_idx, instruction, screenshot_url, action,
+        channel=channel,
+        status="approval_needed",
+        blocked=True,
+        block_reason=policy_reason,
+        approval_pending=action_dict,
+    )
+    console.print(f"[yellow]awaiting human approval ({APPROVAL_TIMEOUT}s timeout)...[/yellow]")
+    got_response = approval_event.wait(timeout=APPROVAL_TIMEOUT)
+    if got_response and approval_result.get("approved"):
+        console.print("[green]action approved by human[/green]")
+        return True
+    if got_response:
+        console.print("[red]action denied by human[/red]")
+    else:
+        console.print("[red]approval timed out -- denying by default[/red]")
+    return False
+
+
 _ADDRESS_BAR_Y_THRESHOLD = 55
+_STUCK_WINDOW = 3
+_STUCK_FORCE_RECOVERY_THRESHOLD = 4
+
+
+def _action_signature(action: Any) -> tuple[str, int, int]:
+    return (
+        action.type,
+        getattr(action, "x", 0) or 0,
+        getattr(action, "y", 0) or 0,
+    )
+
+
+def _is_stuck(history: list[tuple[str, int, int]]) -> bool:
+    if len(history) < _STUCK_WINDOW:
+        return False
+    window = history[-_STUCK_WINDOW:]
+    return len(set(window)) == 1
 
 
 def _execute_action(b: BrowserBackend, action: Any) -> bool:
@@ -183,6 +231,12 @@ def run_single_attempt(
         screenshot_url = b.screenshot_url()
         _notify_ui(0, instruction, screenshot_url, channel=channel, status="started")
 
+        initial_text = instruction
+        if url and hasattr(b, "extract_page_text"):
+            page_text = b.extract_page_text()
+            if page_text:
+                initial_text += f"\n\n[PAGE TEXT CONTENT]\n{page_text[:3000]}\n[/PAGE TEXT CONTENT]"
+
         response = lightcone.responses.create(
             model=MODEL,
             instructions=SYSTEM_PROMPT,
@@ -190,13 +244,15 @@ def run_single_attempt(
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_text", "text": instruction},
+                        {"type": "input_text", "text": initial_text},
                         {"type": "input_image", "image_url": screenshot_url, "detail": "auto"},
                     ],
                 }
             ],
             tools=TOOLS,
         )
+
+        action_history: list[tuple[str, int, int]] = []
 
         for step_idx in range(MAX_STEPS):
             computer_call = None
@@ -238,19 +294,36 @@ def run_single_attempt(
                 if not policy.allowed:
                     step.blocked = True
                     step.block_reason = policy.reason
-                    traj.error = f"blocked unsafe action: {policy.reason}"
-                    _notify_ui(
-                        step_idx,
-                        instruction,
-                        screenshot_url,
-                        action,
-                        channel=channel,
-                        status="blocked",
-                        blocked=True,
-                        block_reason=policy.reason,
+                    approved = _request_approval(
+                        step_idx, instruction, screenshot_url,
+                        action, policy.reason, channel=channel,
                     )
-                    console.print(f"[red]blocked unsafe action:[/red] {policy.reason}")
-                    break
+                    if approved:
+                        step.blocked = False
+                        step.block_reason = None
+                        _notify_ui(
+                            step_idx, instruction, screenshot_url, action,
+                            channel=channel, status="approved", blocked=False,
+                        )
+                    else:
+                        traj.error = f"blocked unsafe action (denied): {policy.reason}"
+                        _notify_ui(
+                            step_idx, instruction, screenshot_url, action,
+                            channel=channel, status="denied",
+                            blocked=True, block_reason=policy.reason,
+                        )
+                        console.print(f"[red]blocked unsafe action:[/red] {policy.reason}")
+                        break
+
+            sig = _action_signature(action)
+            action_history.append(sig)
+
+            stuck = _is_stuck(action_history)
+            if stuck and len(action_history) >= _STUCK_FORCE_RECOVERY_THRESHOLD:
+                console.print("[red]stuck: forcing Escape + scroll recovery[/red]")
+                b.hotkey("Escape")
+                b.scroll(0, 3, 640, 400)
+                action_history.clear()
 
             terminated = _execute_action(b, action)
             if terminated:
@@ -304,6 +377,15 @@ def run_single_attempt(
                         "scroll to reveal the element, or use a keyboard shortcut instead."
                     ),
                 })
+            if stuck:
+                call_output_input.append({
+                    "role": "user",
+                    "content": (
+                        "WARNING: You appear stuck — your last actions were identical with no page change. "
+                        "You MUST try a completely different approach: press Escape, scroll the page, "
+                        "use keyboard navigation (Tab/Enter), or navigate to a different URL."
+                    ),
+                })
 
             response = lightcone.responses.create(
                 model=MODEL,
@@ -313,5 +395,14 @@ def run_single_attempt(
             )
         else:
             traj.error = f"hit MAX_STEPS={MAX_STEPS} without terminating"
+
+        if _DOM_EXTRACTION and not traj.error:
+            dom_listings = extract_listings(b, marketplace=None)
+            if dom_listings:
+                if traj.extracted and isinstance(traj.extracted, list):
+                    traj.extracted.extend(dom_listings)
+                else:
+                    traj.extracted = dom_listings
+                console.print(f"[green]DOM extraction:[/green] {len(dom_listings)} listings extracted")
 
     return traj
