@@ -247,13 +247,42 @@ async def index():
             .steering-panel {
                 background: var(--bg-color);
                 border-top: 1px solid var(--panel-border);
-                padding: 40px;
+                padding: 32px 40px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                width: 100%;
+                box-sizing: border-box;
+                min-height: 160px;
+            }
+
+            .steering-inputs {
                 display: flex;
                 gap: 24px;
                 align-items: center;
                 width: 100%;
-                box-sizing: border-box;
-                min-height: 120px;
+            }
+
+            .suggestions {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .suggestion-pill {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid var(--panel-border);
+                padding: 6px 12px;
+                border-radius: 99px;
+                font-size: 11px;
+                color: var(--text-muted);
+                cursor: pointer;
+                transition: all 0.2s;
+                white-space: nowrap;
+            }
+            .suggestion-pill:hover {
+                background: rgba(255, 255, 255, 0.1);
+                border-color: var(--primary);
+                color: var(--text-main);
             }
 
             .input-group { display: flex; flex-direction: column; gap: 6px; }
@@ -302,21 +331,34 @@ async def index():
         <div class="grid-container" id="grid-container"></div>
         
         <div class="steering-panel">
-            <div class="input-group" style="flex: 1; max-width: 400px;">
-                <label>Target URL</label>
-                <input type="text" id="target-url" placeholder="https://…">
+            <div class="steering-inputs">
+                <div class="input-group" style="flex: 1; max-width: 400px;">
+                    <label>Target URL</label>
+                    <input type="text" id="target-url" placeholder="https://…">
+                </div>
+                <div class="input-group" style="flex: 2;">
+                    <label>Objective</label>
+                    <input type="text" id="target-task" value="extract top 10 stories with title, url, points as a table">
+                </div>
+                <button id="btn-start" class="btn-start" onclick="startSwarm()">
+                    <span id="btn-text">Launch Swarm</span>
+                    <div id="btn-loader" class="loader"></div>
+                </button>
             </div>
-            <div class="input-group" style="flex: 2;">
-                <label>Objective</label>
-                <input type="text" id="target-task" value="extract top 10 stories with title, url, points as a table">
+            <div class="suggestions">
+                <div class="suggestion-pill" onclick="setTask('https://www.amazon.com', 'find the cheapest ergonomic office chair under $200 and add to cart')">Amazon: Office Chair</div>
+                <div class="suggestion-pill" onclick="setTask('https://www.ebay.com', 'find a mechanical keyboard with cherry mx brown switches and add to watchlist')">eBay: Keyboard</div>
+                <div class="suggestion-pill" onclick="setTask('https://www.bestbuy.com', 'find the latest M3 MacBook Pro and check local pickup availability')">Best Buy: MacBook</div>
+                <div class="suggestion-pill" onclick="setTask('https://www.nike.com', 'find white air force 1 size 10 and add to cart')">Nike: Air Force 1</div>
             </div>
-            <button id="btn-start" class="btn-start" onclick="startSwarm()">
-                <span id="btn-text">Launch Swarm</span>
-                <div id="btn-loader" class="loader"></div>
-            </button>
         </div>
         
         <script>
+            function setTask(url, task) {
+                document.getElementById('target-url').value = url;
+                document.getElementById('target-task').value = task;
+            }
+
             const NUM_AGENTS = 9;
             const gridContainer = document.getElementById("grid-container");
             const DISPLAY_WIDTH = 1280;
