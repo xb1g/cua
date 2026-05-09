@@ -343,7 +343,7 @@ def generate_visualizations(output_dir: Path, csv_path: Path) -> None:
     ax.legend()
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(output_dir / "reward_curve.png", dpi=150)
+    plt.savefig(str(output_dir / "reward_curve.png"), dpi=150)
     plt.close()
 
     # Rolling reward
@@ -355,7 +355,7 @@ def generate_visualizations(output_dir: Path, csv_path: Path) -> None:
     ax.set_title("Rolling Average Reward (window=5)")
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(output_dir / "rolling_reward.png", dpi=150)
+    plt.savefig(str(output_dir / "rolling_reward.png"), dpi=150)
     plt.close()
 
     # Strategy counts
@@ -367,7 +367,7 @@ def generate_visualizations(output_dir: Path, csv_path: Path) -> None:
     ax.set_title("Strategy Selection Count")
     ax.tick_params(axis="x", rotation=20)
     plt.tight_layout()
-    plt.savefig(output_dir / "strategy_counts.png", dpi=150)
+    plt.savefig(str(output_dir / "strategy_counts.png"), dpi=150)
     plt.close()
 
     # Avg reward by strategy
@@ -379,7 +379,7 @@ def generate_visualizations(output_dir: Path, csv_path: Path) -> None:
     ax.set_title("Average Reward by Strategy")
     ax.tick_params(axis="x", rotation=20)
     plt.tight_layout()
-    plt.savefig(output_dir / "avg_reward_by_strategy.png", dpi=150)
+    plt.savefig(str(output_dir / "avg_reward_by_strategy.png"), dpi=150)
     plt.close()
 
     console.print(f"[green]Generated visualizations in {output_dir}[/green]")
