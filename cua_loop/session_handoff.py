@@ -105,7 +105,13 @@ def snapshot_kernel_session(backend: Any, profile_name: str) -> bool:
             console.print(f"[yellow]handoff:[/yellow] could not attach profile to session: {e}")
 
         # 3. Delete the session — Kernel flushes cookies/storage into the profile on delete.
-        k.browsers.delete(id=sid)
+        try:
+            k.browsers.delete(session_id=sid)
+        except TypeError:
+            try:
+                k.browsers.delete(sid)
+            except Exception:
+                pass
         console.print(f"[blue]handoff:[/blue] deleted session {sid!r} — browser state flushed to profile")
 
         # Mark the backend's session ID as gone so its __exit__ won't double-delete.
