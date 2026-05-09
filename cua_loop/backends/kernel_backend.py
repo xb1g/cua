@@ -287,14 +287,14 @@ class KernelBackend:
 
     def click(self, x: int, y: int) -> None:
         sx, sy = self._snap_coords(x, y)
-        self._kernel.browsers.computer.click_mouse(self._sid, sx, sy)
+        self._kernel.browsers.computer.click_mouse(self._sid, x=sx, y=sy)
 
     def double_click(self, x: int, y: int) -> None:
         sx, sy = self._snap_coords(x, y)
-        self._kernel.browsers.computer.click_mouse(self._sid, sx, sy, num_clicks=2)
+        self._kernel.browsers.computer.click_mouse(self._sid, x=sx, y=sy, num_clicks=2)
 
     def right_click(self, x: int, y: int) -> None:
-        self._kernel.browsers.computer.click_mouse(self._sid, x, y, button="right")
+        self._kernel.browsers.computer.click_mouse(self._sid, x=x, y=y, button="right")
 
     def type(self, text: str) -> None:
         """Type text, converting newlines to Enter key presses."""
@@ -302,24 +302,24 @@ class KernelBackend:
             parts = text.split("\n")
             for i, part in enumerate(parts):
                 if part:
-                    self._kernel.browsers.computer.type_text(self._sid, part)
+                    self._kernel.browsers.computer.type_text(self._sid, text=part)
                 if i < len(parts) - 1:
-                    self._kernel.browsers.computer.press_key(self._sid, ["Enter"])
+                    self._kernel.browsers.computer.press_key(self._sid, keys=["Enter"])
         else:
-            self._kernel.browsers.computer.type_text(self._sid, text)
+            self._kernel.browsers.computer.type_text(self._sid, text=text)
 
     def hotkey(self, *keys: str) -> None:
         # Northstar emits things like ["Control", "c"] or ["cmd", "l"].
         # Kernel expects ["Ctrl+c"]-style combos with canonical names.
         combo = "+".join(_map_key(k) for k in keys)
-        self._kernel.browsers.computer.press_key(self._sid, [combo])
+        self._kernel.browsers.computer.press_key(self._sid, keys=[combo])
 
     def scroll(self, dx: int, dy: int, x: int, y: int) -> None:
-        self._kernel.browsers.computer.scroll(self._sid, x, y, delta_x=dx, delta_y=dy)
+        self._kernel.browsers.computer.scroll(self._sid, x=x, y=y, delta_x=dx, delta_y=dy)
 
     def drag(self, x1: int, y1: int, x2: int, y2: int) -> None:
         self._kernel.browsers.computer.drag_mouse(
-            self._sid, path=[[x1, y1], [x2, y2]]
+            id=self._sid, path=[[x1, y1], [x2, y2]]
         )
 
     def navigate(self, url: str) -> None:
