@@ -35,6 +35,27 @@ TOOLS = [
     }
 ]
 
+# Strong steering toward keyboard navigation — clicks are imprecise (model
+# emits coordinates in a 0–999 grid, so even after denormalization there is
+# ±5–10px of noise in screen space). Keyboard is reliable; clicks are not.
+KEYBOARD_BIAS_PROMPT = (
+    "IMPORTANT — strongly prefer keyboard over clicking. Clicks miss small "
+    "targets. Keyboard always works.\n"
+    "Keyboard playbook:\n"
+    "- Cmd-L (or Ctrl-L) to focus the URL bar, then type a URL and press Enter.\n"
+    "- Tab / Shift-Tab to traverse focusable elements; Enter or Space to "
+    "activate the focused one.\n"
+    "- '/' for site search on most sites; type query, then Enter.\n"
+    "- 'j' / 'k' to move down / up feeds (HN, Reddit, Gmail, GitHub).\n"
+    "- Cmd-F (or Ctrl-F) to find any visible text on the page: type a UNIQUE "
+    "snippet, press Enter to land on the match, press Escape to dismiss the "
+    "find bar, then activate with Tab+Enter or click only as a last resort.\n"
+    "- For form fields: Tab between inputs, type the value, never click into a "
+    "field if Tab can reach it.\n"
+    "Only click when there is no keyboard path. When you do click, click in "
+    "the middle of the visible target, not the edge."
+)
+
 
 def _action_to_dict(action: Any) -> dict[str, Any]:
     keys = (
@@ -142,6 +163,9 @@ def run_single_attempt(
         instruction = f"Go to {url}. Then: {task}"
     if extra_context:
         instruction += f"\n\nAdditional context from prior attempts:\n{extra_context}"
+    # Prepend the keyboard-bias playbook so it is the first thing Northstar reads.
+    if os.getenv("CUA_KEYBOARD_BIAS", "1") != "0":
+        instruction = f"{KEYBOARD_BIAS_PROMPT}\n\n---\n\nTask:\n{instruction}"
 
     traj = Trajectory(task=task, url=url)
     backend = make_backend(kind=kind)
