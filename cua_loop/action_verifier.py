@@ -94,14 +94,15 @@ class LoopBreaker:
 
         window = self._history[-self._window:]
 
-        types = [r.action_type for r in window]
-        most_common = max(set(types), key=types.count)
-        ratio = types.count(most_common) / len(types)
+        identities = [(r.action_type, r.keys) for r in window]
+        most_common_id = max(set(identities), key=identities.count)
+        ratio = identities.count(most_common_id) / len(identities)
+        most_common = most_common_id[0]
 
         if ratio < MAX_SAME_TYPE_RATIO:
             return ActionVerification(True, "action variety OK")
 
-        same_type = [r for r in window if r.action_type == most_common]
+        same_type = [r for r in window if (r.action_type, r.keys) == most_common_id]
 
         if most_common in ("click", "double_click") and all(r.x is not None and r.y is not None for r in same_type):
             xs = [r.x for r in same_type]
