@@ -23,7 +23,7 @@ from typing import Any
 from anthropic import Anthropic
 from pydantic import BaseModel, Field
 
-SCANNER_MODEL = os.getenv("SCANNER_MODEL", "claude-haiku-4-5-20251001")
+SCANNER_MODEL = os.getenv("SCANNER_MODEL", "MiniMax-M2.7-highspeed")
 
 # ---------------------------------------------------------------------------
 # Types
