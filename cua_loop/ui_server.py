@@ -8,6 +8,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import traceback
+import concurrent.futures
+
+# Custom executor for agent threads to allow cleaner shutdown
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=30)
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
@@ -17,8 +21,13 @@ from cua_loop.approval import approval_event, approval_result
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-from cua_loop.demo_listings import demo_router
-app.include_router(demo_router)
+# from cua_loop.demo_listings import demo_router
+# app.include_router(demo_router)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    print("\n[AEGIS] Shutting down... cancelling agent threads.")
+    executor.shutdown(wait=False, cancel_futures=True)
 
 NUM_AGENTS = 9
 
@@ -48,10 +57,11 @@ body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-color);
 NAV_HTML = """
 <nav style="width:100%;padding:8px 40px;box-sizing:border-box;display:flex;gap:24px;align-items:center;border-bottom:1px solid rgba(255,255,255,0.06);">
     <a href="/" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Studio</a>
-    <a href="/split" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Split Compare</a>
-    <a href="/bargains" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Bargain Board</a>
-    <a href="/verdicts" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Verdict Feed</a>
-    <a href="/browsers" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Browser Grid</a>
+    <a href="/split" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Compare</a>
+    <a href="/swarm" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Swarm</a>
+    <a href="/bargains" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Bargains</a>
+    <a href="/verdicts" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Verdicts</a>
+    <a href="/browsers" style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;">Browsers</a>
 </nav>
 """
 
@@ -92,6 +102,10 @@ browser_sessions: list[dict] = []
 # ── Bargain board state ──────────────────────────────────────────────────────
 bargain_listings: list[dict] = []
 
+# ── Swarm state ──────────────────────────────────────────────────────────────
+swarm_state: dict[str, dict] = {}
+swarm_clients: set = set()
+
 async def broadcast(data):
     for q in clients:
         await q.put(data)
@@ -102,6 +116,11 @@ async def broadcast(data):
         except Exception:
             dead_ws.add(ws)
     ws_clients.difference_update(dead_ws)
+
+async def broadcast_swarm(agent_id: str, data: dict):
+    msg = {"type": "update", "agent_id": agent_id, "data": data}
+    for q in swarm_clients:
+        await q.put(msg)
 
 async def broadcast_raw(data):
     for q in clients_raw:
@@ -124,6 +143,11 @@ async def update_state(request: Request, data: dict):
     elif channel == "aegis":
         state_aegis.update({k: v for k, v in data.items() if v is not None})
         await broadcast_aegis(state_aegis)
+    elif channel.startswith("agent_"):
+        if channel not in swarm_state:
+            swarm_state[channel] = _default_state()
+        swarm_state[channel].update({k: v for k, v in data.items() if v is not None})
+        await broadcast_swarm(channel, swarm_state[channel])
     else:
         state.update({k: v for k, v in data.items() if v is not None})
         await broadcast(state)
@@ -164,6 +188,7 @@ async def approve_action(data: dict):
 class StartRequest(BaseModel):
     task: str
     url: str | None = None
+    swarm: bool = False
 
 class VerdictEntry(BaseModel):
     type: str
@@ -294,6 +319,27 @@ def _make_sse_endpoint(target_state, target_clients):
 app.get("/split/stream/raw")(_make_sse_endpoint(state_raw, clients_raw))
 app.get("/split/stream/aegis")(_make_sse_endpoint(state_aegis, clients_aegis))
 
+@app.get("/swarm/stream")
+async def swarm_stream(request: Request):
+    async def gen():
+        q: asyncio.Queue = asyncio.Queue()
+        swarm_clients.add(q)
+        try:
+            # Send initial full state
+            yield f"data: {json.dumps({'type': 'full_state', 'data': swarm_state})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            swarm_clients.discard(q)
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
 # ── Split-screen agent runners ───────────────────────────────────────────────
 def run_split_raw_sync(url: str | None, task: str):
     import httpx
@@ -347,8 +393,8 @@ async def start_split(req: StartRequest):
     await broadcast_raw(state_raw)
     await broadcast_aegis(state_aegis)
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, run_split_raw_sync, req.url, req.task)
-    loop.run_in_executor(None, run_split_aegis_sync, req.url, req.task)
+    loop.run_in_executor(executor, run_split_raw_sync, req.url, req.task)
+    loop.run_in_executor(executor, run_split_aegis_sync, req.url, req.task)
     return {"status": "started"}
 
 # ── Original agent runner ────────────────────────────────────────────────────
@@ -396,6 +442,34 @@ def run_agent_sync(url: str | None, task: str):
         except Exception:
             pass
 
+def run_swarm_sync(url: str | None, task: str):
+    import httpx
+    from cua_loop.scaling import run_wide_scaling
+    try:
+        width = 9  # default swarm width
+        clean_url = url.strip() if url else None
+        result = run_wide_scaling(task=task, url=clean_url or None, width=width)
+
+        status = "success" if result.success else "failed"
+        rows = len(result.extracted) if result.extracted else 0
+        payload = {
+            "status": status,
+            "result": f"Swarm finished: {status} — extracted {rows} total rows in {result.total_duration_s:.1f}s."
+        }
+        try:
+            httpx.post("http://localhost:8555/update", json=payload, timeout=10.0)
+        except Exception:
+            pass
+    except Exception as e:
+        try:
+            httpx.post(
+                "http://localhost:8555/update",
+                json={"status": "failed", "result": f"Swarm error: {e}\n{traceback.format_exc()}"},
+                timeout=10.0,
+            )
+        except Exception:
+            pass
+
 @app.post("/start")
 async def start_agent(req: StartRequest):
     state["status"] = "running"
@@ -407,8 +481,10 @@ async def start_agent(req: StartRequest):
     await broadcast(state)
 
     loop = asyncio.get_event_loop()
-    import concurrent.futures
-    loop.run_in_executor(None, run_agent_sync, req.url, req.task)
+    if req.swarm:
+        loop.run_in_executor(executor, run_swarm_sync, req.url, req.task)
+    else:
+        loop.run_in_executor(executor, run_agent_sync, req.url, req.task)
     return {"status": "started"}
 
 @app.get("/stream")
@@ -592,7 +668,7 @@ async def index():
                         <label>Agent Prompt</label>
                         <textarea id="target-task" placeholder="e.g. extract top 10 stories with title, url, points as a table">extract top 10 stories with title, url, points as a table</textarea>
                     </div>
-                    
+
                     <button id="btn-start" class="btn-start" onclick="startAgent()">
                         <span>Start Agent</span>
                         <div id="btn-loader" class="loader"></div>
@@ -661,10 +737,11 @@ async def index():
 
                 btnStart.disabled = true;
                 btnLoader.style.display = "block";
-                btnStart.querySelector('span').innerText = "Starting...";
+                btnStart.querySelector('span').innerText = "Starting Agent...";
                 resultBox.style.display = "none";
 
-                const body = url ? { url, task } : { task };
+                const body = { task, swarm: false };
+                if (url) body.url = url;
                 try {
                     await fetch("/start", {
                         method: "POST",
@@ -793,7 +870,307 @@ async def index():
     </html>
     """
 
-# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/swarm", response_class=HTMLResponse)
+async def swarm_page():
+    return f"""<!DOCTYPE html>
+    <html>
+    <head>
+        <title>AEGIS - Swarm Orchestration</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            {SHARED_CSS}
+            body {{ margin: 0; padding: 0; overflow-x: hidden; min-height: 100vh; width: 100vw; display: flex; flex-direction: column; }}
+            
+            .grid-container {{ 
+                display: grid; 
+                grid-template-columns: repeat(3, 1fr); 
+                grid-template-rows: repeat(3, 1fr); 
+                width: 100vw; 
+                height: calc(100vh - 40px); 
+                gap: 1px; 
+                background: var(--panel-border);
+            }}
+            
+            .agent-view {{ 
+                position: relative; 
+                background: #000; 
+                overflow: hidden; 
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }}
+            
+            .screenshot-img {{ 
+                max-width: 100%; 
+                max-height: 100%; 
+                object-fit: contain; 
+                opacity: 0; 
+                transition: opacity 0.3s ease; 
+                position: absolute; 
+                top: 0; left: 0; width: 100%; height: 100%;
+            }}
+            .screenshot-img.loaded {{ opacity: 1; }}
+            
+            .agent-overlay {{
+                position: absolute;
+                bottom: 0; left: 0; right: 0;
+                padding: 12px 16px;
+                background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+                pointer-events: none;
+                z-index: 5;
+            }}
+            
+            .agent-id {{ font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }}
+            .action-text {{ font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }}
+            .result-text {{ font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 4px; word-break: break-all; }}
+            
+            .status-dot {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }}
+            .agent-view.status-idle .status-dot {{ background: var(--text-muted); }}
+            .agent-view.status-running .status-dot {{ background: var(--primary); animation: pulse 1.5s infinite; box-shadow: 0 0 10px var(--primary); }}
+            .agent-view.status-success .status-dot {{ background: var(--success); box-shadow: 0 0 10px var(--success); }}
+            .agent-view.status-failed .status-dot {{ background: var(--danger); box-shadow: 0 0 10px var(--danger); }}
+            
+            @keyframes pulse {{
+                0% {{ transform: scale(0.95); opacity: 0.5; }}
+                50% {{ transform: scale(1.2); opacity: 1; }}
+                100% {{ transform: scale(0.95); opacity: 0.5; }}
+            }}
+
+            .step-counter {{ font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); }}
+            .step-counter span {{ color: var(--text-main); font-weight: 600; }}
+
+            .cursor-overlay {{ 
+                position: absolute; width: 24px; height: 24px; 
+                background: radial-gradient(circle, rgba(59, 130, 246, 0.8) 0%, rgba(59, 130, 246, 0.2) 60%, transparent 100%);
+                border: 2px solid var(--primary); border-radius: 50%; 
+                pointer-events: none; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); 
+                display: none; transform: translate(-50%, -50%); z-index: 10;
+            }}
+
+            .steering-panel {{
+                background: var(--bg-color);
+                border-top: 1px solid var(--panel-border);
+                padding: 40px;
+                display: flex;
+                gap: 24px;
+                align-items: center;
+                width: 100%;
+                box-sizing: border-box;
+                min-height: 120px;
+            }}
+
+            .input-group {{ display: flex; flex-direction: column; gap: 6px; }}
+            .input-group label {{ font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }}
+            .input-group input {{ background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 10px 14px; border-radius: 8px; font-size: 13px; outline: none; transition: all 0.2s; font-family: 'Inter', sans-serif; }}
+            .input-group input:focus {{ border-color: var(--primary); }}
+            
+            .btn-start {{ 
+                background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; height: 44px; margin-top: auto;
+            }}
+            .btn-start:hover {{ background: var(--primary-hover); }}
+            .btn-start:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+
+            .loader {{ border: 2px solid rgba(255,255,255,0.1); border-top-color: white; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite; display: none; margin-left: 8px; }}
+            @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+            
+            .global-status-dock {{
+                position: fixed;
+                top: 56px;
+                right: 24px;
+                background: var(--panel-bg);
+                backdrop-filter: blur(16px);
+                border: 1px solid var(--panel-border);
+                padding: 8px 16px;
+                border-radius: 99px;
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.05em;
+                color: var(--text-muted);
+                z-index: 50;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                transition: color 0.3s;
+            }}
+            .global-status-dock.active {{ color: var(--primary); border-color: rgba(59, 130, 246, 0.3); }}
+            .global-status-dock.active .status-dot {{ background: var(--primary); animation: pulse 1.5s infinite; box-shadow: 0 0 10px var(--primary); }}
+        </style>
+    </head>
+    <body>
+        {NAV_HTML}
+        
+        <div class="global-status-dock" id="global-status">
+            <div class="status-dot"></div>
+            <span id="global-status-text">SWARM IDLE</span>
+        </div>
+
+        <div class="grid-container" id="grid-container"></div>
+        
+        <div class="steering-panel">
+            <div class="input-group" style="flex: 1; max-width: 400px;">
+                <label>Target URL</label>
+                <input type="text" id="target-url" placeholder="https://…">
+            </div>
+            <div class="input-group" style="flex: 2;">
+                <label>Objective</label>
+                <input type="text" id="target-task" value="extract top 10 stories with title, url, points as a table">
+            </div>
+            <button id="btn-start" class="btn-start" onclick="startSwarm()">
+                <span id="btn-text">Launch Swarm</span>
+                <div id="btn-loader" class="loader"></div>
+            </button>
+        </div>
+        
+        <script>
+            const NUM_AGENTS = 9;
+            const gridContainer = document.getElementById("grid-container");
+            const DISPLAY_WIDTH = 1280;
+            const DISPLAY_HEIGHT = 720;
+            
+            for (let i = 0; i < NUM_AGENTS; i++) {{
+                const el = document.createElement("div");
+                el.className = "agent-view status-idle";
+                el.id = `agent-${{i}}`;
+                el.innerHTML = `
+                    <img id="screenshot-${{i}}" class="screenshot-img" src="" alt=""/>
+                    <div id="cursor-${{i}}" class="cursor-overlay"></div>
+                    <div class="agent-overlay">
+                        <div>
+                            <div class="agent-id">
+                                <div class="status-dot"></div>AGENT 0${{i+1}}
+                            </div>
+                            <div class="action-text" id="action-text-${{i}}">-</div>
+                            <div class="result-text" id="result-text-${{i}}"></div>
+                        </div>
+                        <div class="step-counter">STEP <span id="step-count-${{i}}">0</span>/40</div>
+                    </div>
+                `;
+                gridContainer.appendChild(el);
+                
+                document.getElementById(`screenshot-${{i}}`).onload = function() {{
+                    this.classList.add('loaded');
+                }};
+            }}
+
+            const evtSource = new EventSource("/swarm/stream");
+            const btnStart = document.getElementById("btn-start");
+            const btnText = document.getElementById("btn-text");
+            const btnLoader = document.getElementById("btn-loader");
+            const globalStatus = document.getElementById("global-status");
+            const globalStatusText = document.getElementById("global-status-text");
+            
+            async function startSwarm() {{
+                const url = document.getElementById("target-url").value.trim();
+                const task = document.getElementById("target-task").value.trim();
+                if (!task) return;
+
+                btnStart.disabled = true;
+                btnLoader.style.display = "block";
+                btnText.innerText = "Deploying";
+                globalStatus.className = "global-status-dock active";
+                globalStatusText.innerText = "SWARM ACTIVE";
+
+                try {{
+                    const body = {{ task, swarm: true }};
+                    if (url) body.url = url;
+                    await fetch("/start", {{
+                        method: "POST",
+                        headers: {{ "Content-Type": "application/json" }},
+                        body: JSON.stringify(body)
+                    }});
+                }} catch(e) {{
+                    console.error(e);
+                    resetUI();
+                }}
+            }}
+            
+            function resetUI() {{
+                btnStart.disabled = false;
+                btnLoader.style.display = "none";
+                btnText.innerText = "Launch Swarm";
+                globalStatus.className = "global-status-dock";
+                globalStatusText.innerText = "SWARM IDLE";
+            }}
+            
+            function updateAgent(agentId, data) {{
+                const i = parseInt(agentId.split('_')[1]);
+                if (isNaN(i)) return;
+                
+                const container = document.getElementById(`agent-${{i}}`);
+                const stepCount = document.getElementById(`step-count-${{i}}`);
+                const screenshot = document.getElementById(`screenshot-${{i}}`);
+                const cursor = document.getElementById(`cursor-${{i}}`);
+                const actionText = document.getElementById(`action-text-${{i}}`);
+                const resultText = document.getElementById(`result-text-${{i}}`);
+                
+                if (data.status) {{
+                    container.className = `agent-view status-${{data.status}}`;
+                    if (data.status === 'success' || data.status === 'failed') {{
+                        if (data.result) {{
+                            resultText.innerText = data.result.substring(0, 80) + (data.result.length > 80 ? "..." : "");
+                            resultText.style.color = data.status === 'success' ? 'var(--success)' : 'var(--danger)';
+                        }}
+                    }} else {{
+                        resultText.innerText = "";
+                    }}
+                }}
+                
+                if (data.screenshot_url && data.screenshot_url !== screenshot.src) {{
+                    screenshot.classList.remove('loaded');
+                    screenshot.src = data.screenshot_url;
+                }}
+                
+                if (data.step !== undefined) stepCount.innerText = data.step;
+                
+                if (data.action && Object.keys(data.action).length > 0) {{
+                    actionText.innerText = data.action.type || '-';
+                    
+                    if (data.action.x !== undefined && data.action.y !== undefined) {{
+                        cursor.style.display = 'block';
+                        const updateCursor = () => {{
+                            if (!screenshot.complete) return;
+                            const rect = screenshot.getBoundingClientRect();
+                            if (rect.width === 0) return;
+                            const scale = Math.min(rect.width / DISPLAY_WIDTH, rect.height / DISPLAY_HEIGHT);
+                            const ax = (rect.width - (DISPLAY_WIDTH * scale)) / 2;
+                            const ay = (rect.height - (DISPLAY_HEIGHT * scale)) / 2;
+                            
+                            cursor.style.left = (ax + data.action.x * scale) + 'px';
+                            cursor.style.top = (ay + data.action.y * scale) + 'px';
+                        }};
+                        if (screenshot.complete) updateCursor();
+                        else screenshot.addEventListener('load', updateCursor, {{ once: true }});
+                    }} else {{
+                        cursor.style.display = 'none';
+                    }}
+                }}
+            }}
+            
+            evtSource.onmessage = function(event) {{
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'full_state') {{
+                    let anyActive = false;
+                    for (const [id, agent] of Object.entries(msg.data)) {{
+                        updateAgent(id, agent);
+                        if (agent.status === 'running') anyActive = true;
+                    }}
+                    if (anyActive) {{
+                        globalStatus.className = "global-status-dock active";
+                        globalStatusText.innerText = "SWARM ACTIVE";
+                    }} else {{
+                        resetUI();
+                    }}
+                }} else if (msg.type === 'update') {{
+                    updateAgent(msg.agent_id, msg.data);
+                }}
+            }};
+        </script>
+    </body>
+    </html>"""
+
 # Task 19: KERNEL Live-View IFrame Grid
 # ══════════════════════════════════════════════════════════════════════════════
 @app.get("/browsers", response_class=HTMLResponse)

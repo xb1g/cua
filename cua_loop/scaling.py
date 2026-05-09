@@ -60,7 +60,7 @@ def _score_marketplace_results(extracted: object, task: str) -> list:
     return scores
 
 
-def _run_branch(task: str, url: str | None, branch_index: int, extra_hint: str = "") -> AttemptResult:
+def _run_branch(task: str, url: str | None, branch_index: int, extra_hint: str = "", channel: str = "") -> AttemptResult:
     started = time.time()
     extra_context = (
         f"Wide-scaling branch {branch_index}. Try a distinct strategy. "
@@ -69,7 +69,7 @@ def _run_branch(task: str, url: str | None, branch_index: int, extra_hint: str =
     if extra_hint:
         extra_context += f"\n\n{extra_hint}"
     try:
-        traj = run_single_attempt(task=task, url=url, extra_context=extra_context)
+        traj = run_single_attempt(task=task, url=url, extra_context=extra_context, channel=channel)
     except Exception as exc:
         traj = Trajectory(task=task, url=url, error=str(exc))
 
@@ -94,7 +94,7 @@ def run_wide_scaling(task: str, url: str | None = None, width: int = DEFAULT_WID
 
     console.rule(f"[bold]AEGIS wide scaling width={width}")
     with ThreadPoolExecutor(max_workers=width) as pool:
-        futures = [pool.submit(_run_branch, task, url, i) for i in range(width)]
+        futures = [pool.submit(_run_branch, task, url, i, channel=f"agent_{i}") for i in range(width)]
         for future in as_completed(futures):
             attempt = future.result()
             attempts.append(attempt)
