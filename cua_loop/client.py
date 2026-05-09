@@ -458,6 +458,13 @@ def run_single_attempt(
             loop_breaker.record(action)
             loop_check = loop_breaker.check()
             if not loop_check.passed:
+                if _flag("AEGIS_DOM_EXTRACTION"):
+                    marketplace_name = _detect_marketplace_from_url(traj.url) if _detect_marketplace_from_url else None
+                    rescue_listings = extract_listings(b, marketplace=marketplace_name)
+                    if len(rescue_listings) >= 3:
+                        traj.extracted = rescue_listings
+                        console.print(f"[green]loop detected but DOM rescue: {len(rescue_listings)} listings on page[/green]")
+                        break
                 step.blocked = True
                 step.block_reason = loop_check.reason
                 traj.error = f"loop detected: {loop_check.reason}"
