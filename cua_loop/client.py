@@ -39,8 +39,8 @@ MAX_STEPS = int(os.getenv("CUA_MAX_STEPS", "40"))
 _MARKETPLACE_MODE = os.getenv("AEGIS_MARKETPLACE_MODE", "true").lower() in {"1", "true", "yes"}
 APPROVAL_TIMEOUT = int(os.getenv("AEGIS_APPROVAL_TIMEOUT", "60"))
 _DOM_EXTRACTION = os.getenv("AEGIS_DOM_EXTRACTION", "true").lower() in {"1", "true", "yes"}
-_ELEMENT_ANNOTATIONS = os.getenv("AEGIS_ELEMENT_ANNOTATIONS", "false").lower() in {"1", "true", "yes"}
-_PAGE_TEXT_INJECTION = os.getenv("AEGIS_PAGE_TEXT_INJECTION", "false").lower() in {"1", "true", "yes"}
+_ELEMENT_ANNOTATIONS = os.getenv("AEGIS_ELEMENT_ANNOTATIONS", "true").lower() in {"1", "true", "yes"}
+_PAGE_TEXT_INJECTION = os.getenv("AEGIS_PAGE_TEXT_INJECTION", "true").lower() in {"1", "true", "yes"}
 
 SYSTEM_PROMPT = """\
 You are a precise web scraping agent controlling a browser. Follow these rules strictly.
