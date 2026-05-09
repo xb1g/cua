@@ -3,7 +3,7 @@ import asyncio
 import json
 import time
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -11,6 +11,8 @@ import traceback
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
+
+from cua_loop.approval import approval_event, approval_result
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -76,6 +78,9 @@ clients_aegis: set = set()
 verdict_log: list[dict] = []
 verdict_clients: set = set()
 
+# ── WebSocket clients for bidirectional approval flow ────────────────────────
+ws_clients: set = set()
+
 # ── Browser grid state ───────────────────────────────────────────────────────
 browser_sessions: list[dict] = []
 
@@ -85,6 +90,13 @@ bargain_listings: list[dict] = []
 async def broadcast(data):
     for q in clients:
         await q.put(data)
+    dead_ws = set()
+    for ws in ws_clients:
+        try:
+            await ws.send_json(data)
+        except Exception:
+            dead_ws.add(ws)
+    ws_clients -= dead_ws
 
 async def broadcast_raw(data):
     for q in clients_raw:
@@ -111,6 +123,38 @@ async def update_state(request: Request, data: dict):
         state.update({k: v for k, v in data.items() if v is not None})
         await broadcast(state)
     return {"status": "ok"}
+
+
+# ── Human approval flow (WebSocket + HTTP) ──────────────────────────────────
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    ws_clients.add(websocket)
+    try:
+        await websocket.send_json(state)
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") == "approval_response":
+                approved = data.get("approved", False)
+                approval_result["approved"] = approved
+                approval_event.set()
+                decision = "approved" if approved else "denied"
+                state["status"] = decision
+                state["approval_pending"] = None
+                await broadcast(state)
+    except WebSocketDisconnect:
+        ws_clients.discard(websocket)
+
+@app.post("/approve")
+async def approve_action(data: dict):
+    approved = data.get("approved", False)
+    approval_result["approved"] = approved
+    approval_event.set()
+    decision = "approved" if approved else "denied"
+    state["status"] = decision
+    state["approval_pending"] = None
+    await broadcast(state)
+    return {"status": decision}
 
 class StartRequest(BaseModel):
     task: str
@@ -475,6 +519,23 @@ async def index():
             #result-box { display: none; margin-top: 15px; padding: 15px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
             .result-success { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #a7f3d0; }
             .result-failed { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fecaca; }
+            /* Approval Modal */
+            .status-approval_needed { background: rgba(245, 158, 11, 0.1); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.2); }
+            .status-approval_needed .status-dot { background: #fbbf24; animation: pulse 1.5s infinite; box-shadow: 0 0 10px #fbbf24; }
+            .status-approved { background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); }
+            .status-approved .status-dot { background: #34d399; box-shadow: 0 0 10px #34d399; }
+            .status-denied { background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
+            .status-denied .status-dot { background: #f87171; box-shadow: 0 0 10px #f87171; }
+            #approval-modal { display: none; margin-top: 15px; padding: 20px; border-radius: 12px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); animation: slideIn 0.3s ease; }
+            @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+            #approval-modal .modal-title { font-size: 13px; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+            #approval-modal .modal-action { font-size: 14px; color: var(--text-main); margin-bottom: 8px; line-height: 1.5; }
+            #approval-modal .modal-reason { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+            .btn-approve, .btn-deny { border: none; padding: 10px 24px; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; font-family: 'Inter', sans-serif; }
+            .btn-approve { background: var(--success); color: white; }
+            .btn-approve:hover { background: #059669; transform: translateY(-1px); }
+            .btn-deny { background: var(--danger); color: white; }
+            .btn-deny:hover { background: #dc2626; transform: translateY(-1px); }
         </style>
     </head>
     <body>
@@ -515,6 +576,15 @@ async def index():
                     </button>
                     
                     <div id="result-box"></div>
+                    <div id="approval-modal">
+                        <div class="modal-title">APPROVAL REQUIRED</div>
+                        <div class="modal-action" id="approval-action"></div>
+                        <div class="modal-reason" id="approval-reason"></div>
+                        <div style="display:flex; gap:12px;">
+                            <button class="btn-approve" onclick="respondApproval(true)">Approve</button>
+                            <button class="btn-deny" onclick="respondApproval(false)">Deny</button>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="glass-panel">
@@ -586,6 +656,20 @@ async def index():
                 }
             }
             
+
+            const approvalModal = document.getElementById("approval-modal");
+            const approvalAction = document.getElementById("approval-action");
+            const approvalReason = document.getElementById("approval-reason");
+            
+            function respondApproval(approved) {
+                fetch("/approve", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({approved})
+                });
+                approvalModal.style.display = "none";
+            }
+            
             evtSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 
@@ -608,6 +692,21 @@ async def index():
                             resultBox.className = data.status === 'success' ? 'result-success' : 'result-failed';
                             resultBox.innerText = data.result;
                         }
+                    } else if (data.status === 'approval_needed') {
+                        approvalModal.style.display = "block";
+                        btnStart.disabled = true;
+                        btnLoader.style.display = "none";
+                        btnStart.querySelector('span').innerText = "Awaiting Approval...";
+                        if (data.approval_pending) {
+                            const act = data.approval_pending;
+                            approvalAction.innerText = "Agent wants to: " + (act.type || "unknown action") + (act.text ? " \u2014 " + act.text : "");
+                        }
+                        approvalReason.innerText = data.block_reason || "";
+                    } else if (data.status === 'approved' || data.status === 'denied') {
+                        approvalModal.style.display = "none";
+                        btnStart.disabled = true;
+                        btnLoader.style.display = "block";
+                        btnStart.querySelector('span').innerText = "Agent Running...";
                     } else {
                         btnStart.disabled = false;
                         btnLoader.style.display = "none";
