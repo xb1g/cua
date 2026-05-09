@@ -109,6 +109,24 @@ class KernelBackend:
         b = _png_bytes(result)
         return "data:image/png;base64," + base64.b64encode(b).decode()
 
+    def get_dom_state(self) -> dict[str, Any]:
+        """Return a lightweight summary of the DOM state for verification."""
+        snippet = """
+        return {
+            url: window.location.href,
+            title: document.title,
+            active_tag: document.activeElement ? document.activeElement.tagName : null,
+            active_text: document.activeElement ? (document.activeElement.innerText || document.activeElement.value || '').slice(0, 50) : null,
+            scroll_y: window.scrollY,
+            html_hash: document.body.innerHTML.length // Cheap proxy for change
+        };
+        """
+        try:
+            result = self._exec_pw("return " + snippet)
+            return self._extract_value(result) or {}
+        except Exception:
+            return {}
+
     def _exec_pw(self, code: str) -> Any:
         """Run a Playwright snippet inside the Kernel browser VM."""
         try:
