@@ -7,6 +7,7 @@ interactions = fewer chances to fail.
 
 from __future__ import annotations
 
+import os
 from urllib.parse import quote_plus, urlencode
 
 from cua_loop.query_parser import ParsedQuery
@@ -142,9 +143,12 @@ def generate_all_filtered_urls(
     skip_login_required: bool = False,
 ) -> dict[str, str]:
     from cua_loop.sites import MARKETPLACE_REGISTRY
+    skip_high_detection = os.getenv("AEGIS_SKIP_HIGH_DETECTION", "true").lower() in {"1", "true", "yes"}
     urls: dict[str, str] = {}
     for name, adapter in MARKETPLACE_REGISTRY.items():
         if skip_login_required and adapter.requires_login:
+            continue
+        if skip_high_detection and adapter.bot_detection_level == "high":
             continue
         gen = FILTERED_URL_GENERATORS.get(name)
         if gen:
