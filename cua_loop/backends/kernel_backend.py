@@ -343,3 +343,51 @@ class KernelBackend:
 
     def wait(self, seconds: float) -> None:
         time.sleep(seconds)
+
+    def execute_playwright(self, code: str) -> Any:
+        return self._exec_pw(code)
+
+    def execute_js(self, code: str) -> str:
+        js = f"return await page.evaluate(() => {{ {code} }});"
+        result = self._exec_pw(js)
+        val = self._extract_value(result)
+        if val is None:
+            return ""
+        if isinstance(val, str):
+            return val
+        return json.dumps(val)
+
+    def wait_for_page_load(self, timeout_ms: int = 5000) -> None:
+        code = (
+            f"await page.waitForLoadState('domcontentloaded', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
+            f"await page.waitForLoadState('networkidle', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
+            "return null;"
+        )
+        try:
+            self._exec_pw(code)
+        except Exception:
+            time.sleep(1)
+
+    def execute_playwright(self, code: str) -> Any:
+        return self._exec_pw(code)
+
+    def execute_js(self, code: str) -> str:
+        js = f"return await page.evaluate(() => {{ {code} }});"
+        result = self._exec_pw(js)
+        val = self._extract_value(result)
+        if val is None:
+            return ""
+        if isinstance(val, str):
+            return val
+        return json.dumps(val)
+
+    def wait_for_page_load(self, timeout_ms: int = 5000) -> None:
+        code = (
+            f"await page.waitForLoadState('domcontentloaded', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
+            f"await page.waitForLoadState('networkidle', {{ timeout: {timeout_ms} }}).catch(() => {{}});\n"
+            "return null;"
+        )
+        try:
+            self._exec_pw(code)
+        except Exception:
+            time.sleep(1)
