@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 from anthropic import Anthropic
 
 from cua_loop.types import Trajectory, VerifierResult
 
 VERIFIER_MODEL = os.getenv("VERIFIER_MODEL", "claude-haiku-4-5-20251001")
+VERIFIER_BACKEND = os.getenv("VERIFIER_BACKEND", "anthropic")  # "anthropic" or "openai"
 
 SYSTEM_PROMPT = """\
 You are a strict QA verifier judging whether a CUA scraping agent succeeded.
@@ -55,20 +57,37 @@ VERDICT_TOOL = {
 }
 
 
-_client: Anthropic | None = None
+_client: Any = None
 
 
-def _client_singleton() -> Anthropic:
+def _use_openai_backend() -> bool:
+    if VERIFIER_BACKEND == "openai":
+        return True
+    if os.getenv("VERIFIER_BASE_URL") and not os.getenv("ANTHROPIC_API_KEY"):
+        return True
+    model_lower = VERIFIER_MODEL.lower()
+    if any(x in model_lower for x in ("minimax", "gpt", "deepseek")):
+        return True
+    return False
+
+
+def _client_singleton() -> Any:
     global _client
     if _client is None:
-        base_url = os.getenv("VERIFIER_BASE_URL")
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        kwargs: dict = {"timeout": 60.0}
-        if base_url:
-            kwargs["base_url"] = base_url
-        if api_key:
-            kwargs["api_key"] = api_key
-        _client = Anthropic(**kwargs)
+        if _use_openai_backend():
+            from openai import OpenAI
+            base_url = os.getenv("VERIFIER_BASE_URL", "https://api.minimax.chat/v1")
+            api_key = os.getenv("MINIMAX_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+            _client = OpenAI(api_key=api_key, base_url=base_url, timeout=60.0)
+        else:
+            base_url = os.getenv("VERIFIER_BASE_URL")
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            kwargs: dict = {"timeout": 60.0}
+            if base_url:
+                kwargs["base_url"] = base_url
+            if api_key:
+                kwargs["api_key"] = api_key
+            _client = Anthropic(**kwargs)
     return _client
 
 
@@ -109,7 +128,52 @@ def _build_user_message(traj: Trajectory) -> str:
     )
 
 
-def verify(traj: Trajectory) -> VerifierResult:
+def _verify_openai(traj: Trajectory) -> VerifierResult:
+    """Verify using OpenAI-compatible API (MiniMax, etc.) with JSON mode."""
+    json_prompt = (
+        f"{SYSTEM_PROMPT}\n\n"
+        "Respond with ONLY a JSON object (no markdown, no explanation) with these fields:\n"
+        '  "success": boolean,\n'
+        '  "rows_extracted": integer,\n'
+        '  "schema_valid": boolean,\n'
+        '  "reason": string (max 80 chars)\n'
+    )
+    try:
+        response = _client_singleton().chat.completions.create(
+            model=VERIFIER_MODEL,
+            max_tokens=1024,
+            messages=[
+                {"role": "system", "content": json_prompt},
+                {"role": "user", "content": _build_user_message(traj)},
+            ],
+        )
+    except Exception as e:
+        return VerifierResult(success=False, reason=f"verifier API error: {type(e).__name__}: {str(e)[:60]}")
+
+    text = (response.choices[0].message.content or "").strip()
+    # Strip <think>...</think> blocks (MiniMax reasoning wrapper)
+    import re
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    # Strip markdown fences if the model wraps its JSON
+    if text.startswith("```"):
+        text = "\n".join(text.split("\n")[1:])
+        if text.endswith("```"):
+            text = text[:-3].strip()
+
+    try:
+        data = json.loads(text)
+        return VerifierResult(
+            success=data.get("success", False),
+            rows_extracted=data.get("rows_extracted", 0),
+            schema_valid=data.get("schema_valid", False),
+            reason=str(data.get("reason", ""))[:80],
+        )
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        return VerifierResult(success=False, reason=f"JSON parse error: {text[:80]}")
+
+
+def _verify_anthropic(traj: Trajectory) -> VerifierResult:
+    """Verify using the Anthropic messages API with tool_use."""
     try:
         msg = _client_singleton().messages.create(
             model=VERIFIER_MODEL,
@@ -136,3 +200,9 @@ def verify(traj: Trajectory) -> VerifierResult:
         success=False,
         reason=f"no tool_use in verifier response: {text[:120]}",
     )
+
+
+def verify(traj: Trajectory) -> VerifierResult:
+    if _use_openai_backend():
+        return _verify_openai(traj)
+    return _verify_anthropic(traj)
