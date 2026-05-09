@@ -172,20 +172,30 @@ return JSON.stringify(items);
 """
 
 _REVERB_JS = """\
-const rows = document.querySelectorAll('.rc-listing-card, [class*="ListingCard"], .grid-card');
-const items = Array.from(rows).slice(0, 30).map(el => {
-  const titleEl = el.querySelector('[class*="title"], .rc-listing-card__title');
-  const priceEl = el.querySelector('[class*="price"], .rc-listing-card__price');
+const BADGE_PATTERNS = /^(price drop|reverb bump|sold|on sale|new arrival|featured|sponsored|just listed|popular)$/i;
+const rows = document.querySelectorAll('.rc-listing-card, [class*="ListingCard"], .grid-card, [class*="listing-grid"] > *');
+const seen = new Set();
+const items = Array.from(rows).slice(0, 40).map(el => {
+  const linkEl = el.querySelector('a[href*="/item/"], a[href*="/p/"]');
+  const href = linkEl ? linkEl.href : null;
+  if (href && seen.has(href)) return null;
+  if (href) seen.add(href);
+  const titleEl = el.querySelector('.rc-listing-card__title, [class*="title"]:not([class*="price"])');
+  const priceEl = el.querySelector('.rc-listing-card__price, [class*="price"]');
   const condEl = el.querySelector('[class*="condition"]');
-  const linkEl = el.querySelector('a[href*="/item/"]');
+  var title = titleEl ? titleEl.innerText.trim() : '';
+  if (!title && linkEl) title = linkEl.innerText.trim();
+  var lines = title.split('\\n').filter(function(l) { return l.trim().length > 0 && !BADGE_PATTERNS.test(l.trim()); });
+  title = lines.join(' ').trim();
+  if (title.length < 10) return null;
   return {
-    title: titleEl ? titleEl.innerText.trim() : '',
+    title: title.substring(0, 120),
     price: priceEl ? priceEl.innerText.trim() : null,
     condition: condEl ? condEl.innerText.trim() : null,
-    url: linkEl ? linkEl.href : null,
+    url: href,
     marketplace: 'reverb',
   };
-}).filter(i => i.title);
+}).filter(Boolean);
 return JSON.stringify(items);
 """
 
