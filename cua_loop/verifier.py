@@ -9,7 +9,7 @@ from anthropic import Anthropic
 
 from cua_loop.types import Trajectory, VerifierResult
 
-VERIFIER_MODEL = os.getenv("VERIFIER_MODEL", "claude-haiku-4-5-20251001")
+VERIFIER_MODEL = os.getenv("VERIFIER_MODEL", "MiniMax-M2.7-highspeed")
 
 SYSTEM_PROMPT = """\
 You are a strict QA verifier judging whether a CUA scraping agent succeeded.
@@ -61,11 +61,9 @@ _client: Anthropic | None = None
 def _client_singleton() -> Anthropic:
     global _client
     if _client is None:
-        base_url = os.getenv("VERIFIER_BASE_URL")
         api_key = os.getenv("MINIMAX_API_KEY")
-        kwargs: dict = {"timeout": 60.0}
-        if base_url:
-            kwargs["base_url"] = base_url
+        base_url = os.getenv("VERIFIER_BASE_URL", "https://api.minimaxi.com/anthropic")
+        kwargs: dict = {"timeout": 60.0, "base_url": base_url}
         if api_key:
             kwargs["api_key"] = api_key
         _client = Anthropic(**kwargs)
