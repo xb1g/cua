@@ -198,6 +198,27 @@ def _denorm(mx: int, my: int) -> tuple[int, int]:
     return int(mx * DISPLAY_WIDTH / 999), int(my * DISPLAY_HEIGHT / 999)
 
 
+def _try_parse_json(text: str) -> Any:
+    """Extract JSON array or object from the model's final message."""
+    json_match = re.search(r"\[[\s\S]*\]", text)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            if isinstance(data, list) and len(data) > 0:
+                return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+    json_match = re.search(r"\{[\s\S]*\}", text)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            if isinstance(data, dict):
+                return [data]
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return None
+
+
 def _execute_action(b: BrowserBackend, action: Any) -> bool:
     """Dispatch a Northstar action onto the browser backend.
 
