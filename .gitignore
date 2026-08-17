@@ -6,7 +6,12 @@ __pycache__/
 dist/
 build/
 trajectories/
+trajectories_backup*/
 .pytest_cache/
 .ruff_cache/
 .DS_Store
 rl_data/*.jsonl
+.ipynb_checkpoints/
+Untitled.ipynb
+.vscode/
+.impeccable/
